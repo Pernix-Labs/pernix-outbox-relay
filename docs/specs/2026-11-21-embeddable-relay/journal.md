@@ -60,3 +60,6 @@ run: run_978274a29c69
 - 2026-11-21T21:45:55Z gate — review F1 -> O1 (foreman): image guard checks root relay keys regardless of OutboxRelay presence; package unchanged; A revises Req3 AC6 + design C6/scenario 3, no re-gate; docs say remove stale root keys
 - 2026-11-21T21:45:59Z note — requirements+design -> draft; revision task task_a8045e28969b -> A
 - 2026-11-21T21:46:59Z note — requirements+design re-approved (F1=O1 folded, no re-gate per foreman); minor rework 55b833e
+- 2026-11-21T21:47:01Z note — F1 rework task task_ddf161f88ad5 dispatched
+- 2026-11-21T21:54:08Z note — F1 rework 9c3644b (unit 1060 / integration 278 green); re-review
+- 2026-11-21T21:56:01Z note — re-review clean; opening PR
