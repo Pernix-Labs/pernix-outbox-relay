@@ -5,7 +5,7 @@ using Pernix.OutboxRelay.Core.Configuration;
 
 namespace Pernix.OutboxRelay.Host.Configuration;
 
-// Pre-migration root-level config would otherwise start the image with zero outboxes.
+// Pre-migration or stale root-level config would otherwise start the image with zero outboxes. Runs whether or not OutboxRelay exists.
 public sealed class LegacyConfigurationGuard(IConfiguration configuration) : IHostedLifecycleService
 {
     private static readonly string[] LegacyKeys = ["Outboxes", "Destinations", "KafkaClusters"];
@@ -28,11 +28,6 @@ public sealed class LegacyConfigurationGuard(IConfiguration configuration) : IHo
 
     internal static IReadOnlyList<string> Find(IConfiguration root)
     {
-        if (root.GetSection(RelayConfiguration.SectionName).Exists())
-        {
-            return [];
-        }
-
         var failures = new List<string>();
         foreach (var key in LegacyKeys.Where(k => root.GetSection(k).Exists()))
         {

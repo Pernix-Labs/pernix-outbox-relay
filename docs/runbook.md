@@ -123,7 +123,7 @@ This image reads relay settings only under `OutboxRelay`. Before rolling it out,
 - **Mounted appsettings and command line.** Nest the relay sections under `"OutboxRelay"` and prefix command-line keys with `OutboxRelay:`.
 - `HostOptions`, `Kestrel`, `Logging`, `SERVICE_*` and `OTEL_*` do not change.
 
-A pod started with only root-level relay settings logs `StartupFailed` and exits `1`, naming each key to move (section 6e). Once any `OutboxRelay` key is set, root-level relay keys are ignored, so move all of them in one change.
+A pod started with only root-level relay settings logs `StartupFailed` and exits `1`, naming each key to move (section 6e). Startup fails while any root relay key remains, even when `OutboxRelay` keys are set. After the migration, remove the stale root keys from appsettings, SSM parameter paths, Helm env values and the command line.
 
 ## 3. Database prerequisites
 

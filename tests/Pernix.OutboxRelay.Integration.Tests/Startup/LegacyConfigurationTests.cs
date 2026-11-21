@@ -56,11 +56,56 @@ public sealed class LegacyConfigurationTests(PostgreSqlFixture postgres, KafkaFi
     }
 
     [Fact]
-    public async Task Root_keys_alongside_OutboxRelay_section_start_and_are_ready()
+    public async Task Root_keys_alongside_OutboxRelay_section_refuse_to_start()
     {
         var relay = RelayFactory.OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (RelayFactory.NewOutboxName(), await postgres.CreateOutboxAsync()));
         var legacy = RelayFactory.OutboxSettings(SecretConnection, "127.0.0.1:1", (RelayFactory.NewOutboxName(), "public"));
         await using var factory = new RelayFactory().WithRelaySettings(relay).WithRootSettings(legacy);
+
+        var ex = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(ex);
+        var failures = Assert.Single(Flatten(ex).OfType<RelayStartupValidationException>().Distinct()).Failures;
+        Assert.Equal(
+            [
+                "Outboxes: relay settings moved under OutboxRelay; move to OutboxRelay:Outboxes (env OutboxRelay__Outboxes__...)",
+                "Destinations: relay settings moved under OutboxRelay; move to OutboxRelay:Destinations (env OutboxRelay__Destinations__...)",
+                "KafkaClusters: relay settings moved under OutboxRelay; move to OutboxRelay:KafkaClusters (env OutboxRelay__KafkaClusters__...)",
+                "ConnectionStrings.Main: move to OutboxRelay:ConnectionStrings:Main (env OutboxRelay__ConnectionStrings__Main)",
+            ],
+            failures);
+        Assert.DoesNotContain("legacy-s3cr3t", ex.ToString(), StringComparison.Ordinal);
+    }
+
+    // Partial migration: only the connection string moved under OutboxRelay, relay definitions still at the root.
+    [Fact]
+    public async Task Partial_migration_with_only_relay_connection_string_refuses_to_start()
+    {
+        var legacy = RelayFactory.OutboxSettings(SecretConnection, "127.0.0.1:1", (RelayFactory.NewOutboxName(), "public"));
+        legacy.Remove("ConnectionStrings:Main");
+        await using var factory = new RelayFactory()
+            .WithRelaySettings(new Dictionary<string, string?> { ["ConnectionStrings:Main"] = SecretConnection })
+            .WithRootSettings(legacy);
+
+        var ex = Record.Exception(() => factory.CreateClient());
+
+        Assert.NotNull(ex);
+        var failures = Assert.Single(Flatten(ex).OfType<RelayStartupValidationException>().Distinct()).Failures;
+        Assert.Equal(
+            [
+                "Outboxes: relay settings moved under OutboxRelay; move to OutboxRelay:Outboxes (env OutboxRelay__Outboxes__...)",
+                "Destinations: relay settings moved under OutboxRelay; move to OutboxRelay:Destinations (env OutboxRelay__Destinations__...)",
+                "KafkaClusters: relay settings moved under OutboxRelay; move to OutboxRelay:KafkaClusters (env OutboxRelay__KafkaClusters__...)",
+            ],
+            failures);
+        Assert.DoesNotContain("legacy-s3cr3t", ex.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OutboxRelay_section_without_root_keys_starts_and_is_ready()
+    {
+        var relay = RelayFactory.OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (RelayFactory.NewOutboxName(), await postgres.CreateOutboxAsync()));
+        await using var factory = new RelayFactory().WithRelaySettings(relay);
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/readyz", Ct);

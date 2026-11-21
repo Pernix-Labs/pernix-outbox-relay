@@ -243,12 +243,12 @@ Breaking change for the image. Earlier images read relay settings from the root 
 | command line | `--Outboxes:0:...` | `--OutboxRelay:Outboxes:0:...` |
 | all | `HostOptions`, `Kestrel`, `Logging`, `SERVICE_*`, `OTEL_*` | unchanged |
 
-When no source sets any `OutboxRelay` key, the image refuses root-level relay settings at startup instead of starting with zero outboxes. It logs `StartupFailed` with one line per legacy key and exits `1`:
+The image refuses root-level relay settings at startup instead of starting with zero outboxes, whether or not any `OutboxRelay` key is set. It logs `StartupFailed` with one line per legacy key and exits `1`:
 
 - `<key>: relay settings moved under OutboxRelay; move to OutboxRelay:<key> (env OutboxRelay__<key>__...)` for each of `Outboxes`, `Destinations`, `KafkaClusters` present at the root.
 - `ConnectionStrings.<name>: move to OutboxRelay:ConnectionStrings:<name> (env OutboxRelay__ConnectionStrings__<name>)` for each root connection string an outbox names. The line names the connection, never its value.
 
-When any `OutboxRelay` key is set, this check does not run and root-level relay keys are ignored. Only `OutboxRelay` settings apply. Remove the root keys after the move. A root `ConnectionStrings:<name>` is never a fallback: an outbox whose connection is missing under `OutboxRelay:ConnectionStrings` fails with `OutboxRelay.Outboxes[<outbox>].Database.Connection: connection string '<name>' is not defined or empty in OutboxRelay.ConnectionStrings`.
+Startup fails while any root relay key remains, so a partial migration (for example only `OutboxRelay:ConnectionStrings:Main` set, with `Outboxes`, `Destinations` and `KafkaClusters` still at the root) does not start. After the move, remove the stale root keys from every source: appsettings, SSM Parameter Store paths, Helm env values and the command line. A root `ConnectionStrings:<name>` is never a fallback: an outbox whose connection is missing under `OutboxRelay:ConnectionStrings` fails with `OutboxRelay.Outboxes[<outbox>].Database.Connection: connection string '<name>' is not defined or empty in OutboxRelay.ConnectionStrings`.
 
 ## Health
 

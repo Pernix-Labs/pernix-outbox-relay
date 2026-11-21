@@ -46,13 +46,42 @@ public sealed class LegacyConfigurationGuardTests
     }
 
     [Fact]
-    public void Find_is_empty_when_OutboxRelay_section_exists()
+    public void Find_reports_root_keys_when_OutboxRelay_section_exists()
     {
         var failures = LegacyConfigurationGuard.Find(Config(
             ("OutboxRelay:Outboxes:0:Name", "orders"),
             ("Outboxes:0:Database:Connection", "Main"),
             ("Destinations:0:Name", "Events"),
             ("KafkaClusters:Main:BootstrapServers", "kafka:9092"),
+            ("ConnectionStrings:Main", Secret)));
+
+        Assert.Equal(AllRootKeyFailures, failures);
+        Assert.All(failures, f => Assert.DoesNotContain("s3cr3t", f, StringComparison.Ordinal));
+    }
+
+    // Partial migration: only the connection string moved, relay definitions still at the root.
+    [Fact]
+    public void Find_reports_root_keys_when_only_relay_connection_string_migrated()
+    {
+        var failures = LegacyConfigurationGuard.Find(Config(
+            ("OutboxRelay:ConnectionStrings:Main", Secret),
+            ("Outboxes:0:Database:Connection", "Main"),
+            ("Destinations:0:Name", "Events"),
+            ("KafkaClusters:Main:BootstrapServers", "kafka:9092"),
+            ("ConnectionStrings:Main", Secret)));
+
+        Assert.Equal(AllRootKeyFailures, failures);
+        Assert.All(failures, f => Assert.DoesNotContain("s3cr3t", f, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Find_is_empty_when_OutboxRelay_section_exists_without_root_keys()
+    {
+        var failures = LegacyConfigurationGuard.Find(Config(
+            ("OutboxRelay:Outboxes:0:Database:Connection", "Main"),
+            ("OutboxRelay:Destinations:0:Name", "Events"),
+            ("OutboxRelay:KafkaClusters:Main:BootstrapServers", "kafka:9092"),
+            ("OutboxRelay:ConnectionStrings:Main", Secret),
             ("ConnectionStrings:Main", Secret)));
 
         Assert.Empty(failures);
@@ -87,6 +116,14 @@ public sealed class LegacyConfigurationGuardTests
 
         await guard.StartingAsync(TestContext.Current.CancellationToken);
     }
+
+    private static readonly string[] AllRootKeyFailures =
+    [
+        "Outboxes: relay settings moved under OutboxRelay; move to OutboxRelay:Outboxes (env OutboxRelay__Outboxes__...)",
+        "Destinations: relay settings moved under OutboxRelay; move to OutboxRelay:Destinations (env OutboxRelay__Destinations__...)",
+        "KafkaClusters: relay settings moved under OutboxRelay; move to OutboxRelay:KafkaClusters (env OutboxRelay__KafkaClusters__...)",
+        "ConnectionStrings.Main: move to OutboxRelay:ConnectionStrings:Main (env OutboxRelay__ConnectionStrings__Main)",
+    ];
 
     private static IConfiguration Config(params (string Key, string? Value)[] values) =>
         new ConfigurationBuilder()
