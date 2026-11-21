@@ -4,6 +4,8 @@ Outbox Relay: a generic transactional outbox service that delivers outbox rows t
 
 Startup refuses features this build lacks, see [Refused in this build](configuration.md#refused-in-this-build).
 
+The relay ships as a container image and as the `Pernix.OutboxRelay.Hosting` package: [`docs/embedding.md`](embedding.md).
+
 Deploying and operating the relay (config examples, database prerequisites, alerts, incidents): [`docs/runbook.md`](runbook.md).
 
 ## Reference
@@ -12,6 +14,7 @@ Deploying and operating the relay (config examples, database prerequisites, aler
 |---|---|---|
 | [`configuration.md`](./configuration.md) | Deployers, operators | Configuration chain, environment variables, outbox configuration, refused settings, startup validation, PostgreSQL prerequisites, Kafka, health, metrics. |
 | [`delivery.md`](./delivery.md) | Producers, consumers, operators | Ordering modes, write-order rule, failure policy, dead letters, graceful stop, routing, operator actions, broker-outage test. |
+| [`embedding.md`](./embedding.md) | Service owners | Run the relay in your own .NET host with `Pernix.OutboxRelay.Hosting`: install, registration, health mapping, telemetry helpers, configuration, host implications. |
 | [`client-packages.md`](./client-packages.md) | Producers | Producer client packages: install, outbox table, grants, publish paths, contracts, first publish. |
 | [`runbook.md`](./runbook.md) | Operators | Deploy, database prerequisites, health, alerts, incidents, duplicates. |
 | [`development.md`](./development.md) | Relay developers | Local run, local docker build, measuring allocations. |
