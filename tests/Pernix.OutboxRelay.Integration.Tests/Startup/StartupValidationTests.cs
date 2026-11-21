@@ -18,41 +18,41 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
     // Overrides are "key=value", or "key" alone for a null value. {outbox} is replaced by the test's outbox name.
     [Theory]
-    [InlineData("Outboxes[{outbox}].Ordering.Mode: required, one of None, PerKey, Strict", "Outboxes:0:Ordering:Mode")]
-    [InlineData("Destinations[Events].Transport: required", "Destinations:0:Transport")]
-    [InlineData("Destinations[Events].Transport: transport 'Sqs' is not implemented in this build", "Destinations:0:Transport=Sqs")]
-    [InlineData("Outboxes[{outbox}].Ordering.Mode: must be one of None, PerKey, Strict", "Outboxes:0:Ordering:Mode=Sideways")]
-    [InlineData("Outboxes[{outbox}].Polling.BatchSize: must be at least 1", "Outboxes:0:Polling:BatchSize=0")]
-    [InlineData("Outboxes[{outbox}].Retry.MaxDelay: must be at least Retry.InitialDelay", "Outboxes:0:Retry:MaxDelay=00:00:01")]
+    [InlineData("OutboxRelay.Outboxes[{outbox}].Ordering.Mode: required, one of None, PerKey, Strict", "Outboxes:0:Ordering:Mode")]
+    [InlineData("OutboxRelay.Destinations[Events].Transport: required", "Destinations:0:Transport")]
+    [InlineData("OutboxRelay.Destinations[Events].Transport: transport 'Sqs' is not implemented in this build", "Destinations:0:Transport=Sqs")]
+    [InlineData("OutboxRelay.Outboxes[{outbox}].Ordering.Mode: must be one of None, PerKey, Strict", "Outboxes:0:Ordering:Mode=Sideways")]
+    [InlineData("OutboxRelay.Outboxes[{outbox}].Polling.BatchSize: must be at least 1", "Outboxes:0:Polling:BatchSize=0")]
+    [InlineData("OutboxRelay.Outboxes[{outbox}].Retry.MaxDelay: must be at least Retry.InitialDelay", "Outboxes:0:Retry:MaxDelay=00:00:01")]
     [InlineData(
-        "Outboxes[{outbox}].Ordering.OnPermanentFailure: Block is not allowed when Ordering.Mode is None",
+        "OutboxRelay.Outboxes[{outbox}].Ordering.OnPermanentFailure: Block is not allowed when Ordering.Mode is None",
         "Outboxes:0:Ordering:Mode=None",
         "Outboxes:0:Ordering:OnPermanentFailure=Block")]
     [InlineData(
-        "Outboxes[{outbox}].DeadLetter.Destination: names the outbox's own destination 'Events'",
+        "OutboxRelay.Outboxes[{outbox}].DeadLetter.Destination: names the outbox's own destination 'Events'",
         "Outboxes:0:DeadLetter:Destination=events")]
     [InlineData(
-        "Outboxes[{outbox}].Destination: destination 'Nowhere' is not defined in Destinations",
+        "OutboxRelay.Outboxes[{outbox}].Destination: destination 'Nowhere' is not defined in Destinations",
         "Outboxes:0:Destination=Nowhere")]
     [InlineData(
-        "Outboxes[{outbox}].DeadLetter.Destination: destination 'Nowhere' is not defined in Destinations",
+        "OutboxRelay.Outboxes[{outbox}].DeadLetter.Destination: destination 'Nowhere' is not defined in Destinations",
         "Outboxes:0:DeadLetter:Destination=Nowhere")]
     [InlineData(
-        "Destinations[Events].Kafka.Cluster: Kafka cluster 'Other' is not defined in KafkaClusters",
+        "OutboxRelay.Destinations[Events].Kafka.Cluster: Kafka cluster 'Other' is not defined in KafkaClusters",
         "Destinations:0:Kafka:Cluster=Other")]
     [InlineData(
-        "Outboxes[{outbox}].Database.Connection: connection string 'Other' is not defined or empty in ConnectionStrings",
+        "OutboxRelay.Outboxes[{outbox}].Database.Connection: connection string 'Other' is not defined or empty in OutboxRelay.ConnectionStrings",
         "Outboxes:0:Database:Connection=Other")]
     [InlineData(
-        "Outboxes[{outbox}].Database.Provider: provider 'SqlServer' is not registered",
+        "OutboxRelay.Outboxes[{outbox}].Database.Provider: provider 'SqlServer' is not registered",
         "Outboxes:0:Database:Provider=SqlServer")]
-    [InlineData("Destinations[Events].Kafka: Topic or Routes is required when Transport is Kafka", "Destinations:0:Kafka:Topic")]
-    [InlineData("Destinations[Events].Kafka: Topic and Routes are both set; set exactly one", "Destinations:0:Kafka:Routes:alerts=risk.alerts")]
+    [InlineData("OutboxRelay.Destinations[Events].Kafka: Topic or Routes is required when Transport is Kafka", "Destinations:0:Kafka:Topic")]
+    [InlineData("OutboxRelay.Destinations[Events].Kafka: Topic and Routes are both set; set exactly one", "Destinations:0:Kafka:Routes:alerts=risk.alerts")]
     [InlineData(
-        "Destinations[Events].Kafka.Routes.alerts: topic is required",
+        "OutboxRelay.Destinations[Events].Kafka.Routes.alerts: topic is required",
         "Destinations:0:Kafka:Topic",
         "Destinations:0:Kafka:Routes:alerts=")]
-    [InlineData("Destinations[Events]: unknown setting 'Database'", "Destinations:0:Database:Table=public.dead_letter")]
+    [InlineData("OutboxRelay.Destinations[Events]: unknown setting 'Database'", "Destinations:0:Database:Table=public.dead_letter")]
     public async Task Invalid_configuration_refuses_to_start(string expected, params string[] overrides)
     {
         var outbox = RelayFactory.NewOutboxName();
@@ -81,7 +81,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         var failures = await StartFailuresAsync(settings);
 
-        Assert.Contains($"Outboxes[1].Name: '{duplicate}' duplicates Outboxes[0] (names are case-insensitive)", failures);
+        Assert.Contains($"OutboxRelay.Outboxes[1].Name: '{duplicate}' duplicates Outboxes[0] (names are case-insensitive)", failures);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         var failures = await StartFailuresAsync(settings);
 
-        Assert.Contains("Destinations[1].Name: 'EVENTS' duplicates Destinations[0] (names are case-insensitive)", failures);
+        Assert.Contains("OutboxRelay.Destinations[1].Name: 'EVENTS' duplicates Destinations[0] (names are case-insensitive)", failures);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         var failures = await StartFailuresAsync(RelayFactory.OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (outbox, schema)));
 
-        Assert.Contains($"Outboxes[{outbox}]: table '{schema}.outbox' not found", failures);
+        Assert.Contains($"OutboxRelay.Outboxes[{outbox}]: table '{schema}.outbox' not found", failures);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         var failures = await StartFailuresAsync(RelayFactory.OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (outbox, schema)));
 
-        Assert.Contains($"Outboxes[{outbox}]: table '{schema}.outbox' missing columns: last_error", failures);
+        Assert.Contains($"OutboxRelay.Outboxes[{outbox}]: table '{schema}.outbox' missing columns: last_error", failures);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         var failures = await StartFailuresAsync(RelayFactory.OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (outbox, schema)));
 
-        Assert.Contains($"Outboxes[{outbox}]: table '{schema}.outbox' missing columns: route", failures);
+        Assert.Contains($"OutboxRelay.Outboxes[{outbox}]: table '{schema}.outbox' missing columns: route", failures);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
         var failures = await StartFailuresAsync(RelayFactory.OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (outbox, schema)));
 
         Assert.Contains(
-            $"Outboxes[{outbox}]: table '{schema}.outbox' columns differ from V001: created_at timestamp without time zone NOT NULL (expected timestamp with time zone NOT NULL)",
+            $"OutboxRelay.Outboxes[{outbox}]: table '{schema}.outbox' columns differ from V001: created_at timestamp without time zone NOT NULL (expected timestamp with time zone NOT NULL)",
             failures);
     }
 
@@ -157,7 +157,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         var failures = await StartFailuresAsync(RelayFactory.OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (first, schema), (second, schema)));
 
-        Assert.Contains($"Outboxes[{second}]: table '{schema}.outbox' same table as outbox '{first}'", failures);
+        Assert.Contains($"OutboxRelay.Outboxes[{second}]: table '{schema}.outbox' same table as outbox '{first}'", failures);
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
         var failures = await StartFailuresAsync(RelayFactory.OutboxSettings(UnreachableConnection, kafka.BootstrapServers, (outbox, "public")));
 
         var failure = Assert.Single(failures);
-        Assert.StartsWith($"Outboxes[{outbox}]: database unreachable (", failure, StringComparison.Ordinal);
+        Assert.StartsWith($"OutboxRelay.Outboxes[{outbox}]: database unreachable (", failure, StringComparison.Ordinal);
         Assert.DoesNotContain("unused", failure, StringComparison.Ordinal);
     }
 
@@ -187,9 +187,9 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         Assert.Equal(
             [
-                $"Outboxes[{outbox}].Polling.BatchSize: must be at least 1",
-                "Destinations[Archive].Transport: transport 'Database' is not implemented in this build",
-                $"Outboxes[{outbox}].DeadLetter.Destination: names the outbox's own destination 'Events'",
+                $"OutboxRelay.Outboxes[{outbox}].Polling.BatchSize: must be at least 1",
+                "OutboxRelay.Destinations[Archive].Transport: transport 'Database' is not implemented in this build",
+                $"OutboxRelay.Outboxes[{outbox}].DeadLetter.Destination: names the outbox's own destination 'Events'",
             ],
             failures);
     }
@@ -203,7 +203,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         var failures = await StartFailuresAsync(settings);
 
-        Assert.Equal([$"Destinations[Events]: topic '{topic}' does not exist"], failures);
+        Assert.Equal([$"OutboxRelay.Destinations[Events]: topic '{topic}' does not exist"], failures);
     }
 
     [Fact]
@@ -267,7 +267,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
 
         var failures = await StartFailuresAsync(settings);
 
-        Assert.Equal([$"Destinations[DeadLetters]: topic '{topic}' does not exist"], failures);
+        Assert.Equal([$"OutboxRelay.Destinations[DeadLetters]: topic '{topic}' does not exist"], failures);
     }
 
     [Fact]
@@ -323,7 +323,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
     {
         string[] args =
         [
-            .. settings.Where(kv => kv.Value is not null).Select(kv => $"--{kv.Key}={kv.Value}"),
+            .. settings.Where(kv => kv.Value is not null).Select(kv => $"--{RelayFactory.RelayKey(kv.Key)}={kv.Value}"),
         ];
         return await Task.Run(() => Assert.IsType<int>(typeof(Program).Assembly.EntryPoint!.Invoke(null, [args])), Ct);
     }

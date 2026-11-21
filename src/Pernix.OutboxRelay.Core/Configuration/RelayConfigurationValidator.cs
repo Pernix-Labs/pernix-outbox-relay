@@ -211,7 +211,7 @@ public static class RelayConfigurationValidator
     {
         if (HasValue(database?.Connection) && string.IsNullOrWhiteSpace(getConnectionString(database!.Connection!)))
         {
-            failures.Add($"{path}.Connection: connection string '{database.Connection}' is not defined or empty in ConnectionStrings");
+            failures.Add($"{path}.Connection: connection string '{database.Connection}' is not defined or empty in OutboxRelay.ConnectionStrings");
         }
 
         if (HasValue(database?.Provider) && !providers.ContainsKey(database!.Provider!))

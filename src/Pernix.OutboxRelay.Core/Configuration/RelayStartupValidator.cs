@@ -9,7 +9,7 @@ namespace Pernix.OutboxRelay.Core.Configuration;
 
 // Runs in StartingAsync, so a failure aborts host start before Kestrel listens and before any worker runs.
 public sealed class RelayStartupValidator(
-    IConfiguration configuration,
+    RelayConfiguration configuration,
     IEnumerable<IOutboxStoreProvider> providers,
     IEnumerable<IDestinationFactory> factories,
     ValidatedOutboxes validatedOutboxes,
@@ -32,8 +32,10 @@ public sealed class RelayStartupValidator(
 
         var resolver = new DestinationFactoryResolver(factories);
 
-        var options = RelayOptionsBinder.Bind(configuration);
-        var failures = RelayConfigurationValidator.Validate(options, configuration.GetConnectionString, providersByName, resolver).ToList();
+        var options = RelayOptionsBinder.Bind(configuration.Section);
+        var failures = RelayConfigurationValidator.Validate(options, configuration.Section.GetConnectionString, providersByName, resolver)
+            .Select(Prefixed)
+            .ToList();
         if (hostOptions.Value.ShutdownTimeout < MinShutdownTimeout)
         {
             failures.Add(
@@ -63,7 +65,7 @@ public sealed class RelayStartupValidator(
             }
             catch (Exception ex) when (ex is OutboxValidationException or OutboxDatabaseUnreachableException)
             {
-                storeFailures.Add(ex.Message);
+                storeFailures.Add(Prefixed(ex.Message));
             }
         }
 
@@ -74,7 +76,7 @@ public sealed class RelayStartupValidator(
 
         var destinationFailures = await Task.WhenAll(options.Destinations.Select(d => ProbeAsync(d, resolver.Get(d), cancellationToken)))
             .ConfigureAwait(false);
-        if (destinationFailures.OfType<string>().ToList() is { Count: > 0 } probeFailures)
+        if (destinationFailures.OfType<string>().Select(Prefixed).ToList() is { Count: > 0 } probeFailures)
         {
             throw new RelayStartupValidationException(probeFailures);
         }
@@ -111,9 +113,12 @@ public sealed class RelayStartupValidator(
 
         if (boundFailures.Count > 0)
         {
-            throw new RelayStartupValidationException(boundFailures);
+            throw new RelayStartupValidationException(boundFailures.Select(Prefixed).ToList());
         }
     }
+
+    // Failure paths are section-relative; the prefix names the section they came from. HostOptions lines are not relay keys.
+    private static string Prefixed(string failure) => RelayConfiguration.SectionName + "." + failure;
 
     private static async Task CheckTermDestinationAsync(
         string outbox, DestinationOptions destination, IDestinationFactory factory, DestinationContext context, bool deadLetter, List<string> failures)

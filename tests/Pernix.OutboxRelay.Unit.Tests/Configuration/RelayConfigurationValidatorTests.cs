@@ -330,7 +330,7 @@ public sealed class RelayConfigurationValidatorTests
     {
         Set("Outboxes:0:Database:Connection", "Other");
 
-        Assert.Equal(["Outboxes[Orders].Database.Connection: connection string 'Other' is not defined or empty in ConnectionStrings"], Validate());
+        Assert.Equal(["Outboxes[Orders].Database.Connection: connection string 'Other' is not defined or empty in OutboxRelay.ConnectionStrings"], Validate());
     }
 
     [Fact]
@@ -338,7 +338,7 @@ public sealed class RelayConfigurationValidatorTests
     {
         Set("ConnectionStrings:OrdersDb", "");
 
-        Assert.Equal(["Outboxes[Orders].Database.Connection: connection string 'OrdersDb' is not defined or empty in ConnectionStrings"], Validate());
+        Assert.Equal(["Outboxes[Orders].Database.Connection: connection string 'OrdersDb' is not defined or empty in OutboxRelay.ConnectionStrings"], Validate());
     }
 
     [Fact]

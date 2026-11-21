@@ -18,7 +18,7 @@ public sealed class RunbookExampleTests
     public void Example_binds_and_validates_with_no_failures()
     {
         var configuration = new ConfigurationBuilder().AddJsonFile(ExamplePath, optional: false, reloadOnChange: false).Build();
-        var provider = new PostgreSqlOutboxStoreProvider(configuration);
+        var provider = new PostgreSqlOutboxStoreProvider(new RelayConfiguration(configuration));
 
         // The connection string comes from SSM or an env var in a deployment, never from the example file.
         var failures = RelayConfigurationValidator.Validate(

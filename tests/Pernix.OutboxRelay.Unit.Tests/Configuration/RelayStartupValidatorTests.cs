@@ -58,6 +58,44 @@ public sealed class RelayStartupValidatorTests
     }
 
     [Fact]
+    public async Task Config_failures_carry_the_section_prefix_and_the_host_options_line_does_not()
+    {
+        settings.Remove("Outboxes:0:Destination");
+        hostOptions.ShutdownTimeout = TimeSpan.FromSeconds(1);
+
+        var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
+
+        Assert.Equal(
+            [
+                "OutboxRelay.Outboxes[Orders].Destination: required",
+                "HostOptions.ShutdownTimeout: must be at least 00:00:28 to cover the 27 s stop budget",
+            ],
+            ex.Failures);
+    }
+
+    [Fact]
+    public async Task Root_connection_string_outside_the_section_does_not_satisfy_lookup()
+    {
+        var root = new ConfigurationBuilder()
+            .AddInMemoryCollection(settings.Select(kv => new KeyValuePair<string, string?>(
+                kv.Key.StartsWith("ConnectionStrings:", StringComparison.Ordinal) ? kv.Key : RelayConfiguration.SectionName + ":" + kv.Key,
+                kv.Value)))
+            .Build();
+        var validator = new RelayStartupValidator(
+            new RelayConfiguration(root.GetSection(RelayConfiguration.SectionName)), [provider], [factory], validatedOutboxes, Options.Create(hostOptions), logger);
+
+        var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(() => validator.StartingAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            [
+                "OutboxRelay.Outboxes[Orders].Database.Connection: connection string 'OrdersDb' is not defined or empty in OutboxRelay.ConnectionStrings",
+                "OutboxRelay.Outboxes[Payments].Database.Connection: connection string 'OrdersDb' is not defined or empty in OutboxRelay.ConnectionStrings",
+            ],
+            ex.Failures);
+        Assert.Empty(provider.Stores);
+    }
+
+    [Fact]
     public async Task Shutdown_timeout_of_28_seconds_passes()
     {
         await StartingAsync();
@@ -73,8 +111,8 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Contains("Outboxes[Orders].Destination: required", ex.Failures);
-        Assert.Contains(ex.Failures, f => f.StartsWith("Outboxes[Payments].Ordering.Mode: required", StringComparison.Ordinal));
+        Assert.Contains("OutboxRelay.Outboxes[Orders].Destination: required", ex.Failures);
+        Assert.Contains(ex.Failures, f => f.StartsWith("OutboxRelay.Outboxes[Payments].Ordering.Mode: required", StringComparison.Ordinal));
         Assert.Empty(provider.Stores);
         Assert.Empty(factory.Created);
         Assert.Empty(validatedOutboxes.Entries);
@@ -91,8 +129,8 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Destinations[OrdersTopic].Kafka.Topic: required when Transport is Kafka",
-                "Destinations[PaymentsTopic].Transport: transport 'Database' is not implemented in this build",
+                "OutboxRelay.Destinations[OrdersTopic].Kafka.Topic: required when Transport is Kafka",
+                "OutboxRelay.Destinations[PaymentsTopic].Transport: transport 'Database' is not implemented in this build",
             ],
             ex.Failures);
         Assert.Empty(provider.Stores);
@@ -109,7 +147,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            ["Outboxes[Orders]: table 'public.outbox' not found", "Outboxes[Payments]: database unreachable (timeout)"],
+            ["OutboxRelay.Outboxes[Orders]: table 'public.outbox' not found", "OutboxRelay.Outboxes[Payments]: database unreachable (timeout)"],
             ex.Failures);
         Assert.Empty(factory.Created);
         Assert.Empty(validatedOutboxes.Entries);
@@ -124,7 +162,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            ["Outboxes[Orders].Database.Connection: connection string is not valid", "Outboxes[Payments]: database unreachable (timeout)"],
+            ["OutboxRelay.Outboxes[Orders].Database.Connection: connection string is not valid", "OutboxRelay.Outboxes[Payments]: database unreachable (timeout)"],
             ex.Failures);
         Assert.Empty(validatedOutboxes.Entries);
     }
@@ -174,7 +212,7 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Equal(["Destinations[OrdersTopic]: topic 'orders.events' does not exist"], ex.Failures);
+        Assert.Equal(["OutboxRelay.Destinations[OrdersTopic]: topic 'orders.events' does not exist"], ex.Failures);
         Assert.Equal(["OrdersTopic"], factory.Disposed);
     }
 
@@ -308,7 +346,7 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Equal([$"Outboxes[Payments]: destination 'PaymentsTopic' declares SendBound {text}; must be greater than zero"], ex.Failures);
+        Assert.Equal([$"OutboxRelay.Outboxes[Payments]: destination 'PaymentsTopic' declares SendBound {text}; must be greater than zero"], ex.Failures);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
     }
 
@@ -321,7 +359,7 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Outboxes[Orders]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero",
+                "OutboxRelay.Outboxes[Orders]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero",
             ],
             ex.Failures);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
@@ -336,7 +374,7 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Equal(["Outboxes[Payments]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero"], ex.Failures);
+        Assert.Equal(["OutboxRelay.Outboxes[Payments]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero"], ex.Failures);
         Assert.Contains(("OrdersTopic", new DestinationContext(OrderingMode.Strict)), factory.Created);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
     }
@@ -350,7 +388,7 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Equal(["Outboxes[Payments]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero"], ex.Failures);
+        Assert.Equal(["OutboxRelay.Outboxes[Payments]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero"], ex.Failures);
     }
 
     [Fact]
@@ -363,8 +401,8 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Outboxes[Orders]: destination 'OrdersTopic' declares route key 'Bad Key'; must match ^[a-z0-9][a-z0-9._-]{0,62}$",
-                "Outboxes[Payments].DeadLetter.Destination: destination 'OrdersTopic' declares Routes. A dead-letter destination has one address.",
+                "OutboxRelay.Outboxes[Orders]: destination 'OrdersTopic' declares route key 'Bad Key'; must match ^[a-z0-9][a-z0-9._-]{0,62}$",
+                "OutboxRelay.Outboxes[Payments].DeadLetter.Destination: destination 'OrdersTopic' declares Routes. A dead-letter destination has one address.",
             ],
             ex.Failures);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
@@ -378,7 +416,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            ["Outboxes[Orders]: destination 'OrdersTopic' declares an empty Routes set; Routes is null (one address) or names at least one route"],
+            ["OutboxRelay.Outboxes[Orders]: destination 'OrdersTopic' declares an empty Routes set; Routes is null (one address) or names at least one route"],
             ex.Failures);
     }
 
@@ -393,7 +431,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            [$"Outboxes[Payments]: destination 'PaymentsTopic' declares route key '{key}'; must match ^[a-z0-9][a-z0-9._-]{{0,62}}$"],
+            [$"OutboxRelay.Outboxes[Payments]: destination 'PaymentsTopic' declares route key '{key}'; must match ^[a-z0-9][a-z0-9._-]{{0,62}}$"],
             ex.Failures);
     }
 
@@ -405,7 +443,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            ["Outboxes[Payments]: destination 'PaymentsTopic' declares route key (null); must match ^[a-z0-9][a-z0-9._-]{0,62}$"],
+            ["OutboxRelay.Outboxes[Payments]: destination 'PaymentsTopic' declares route key (null); must match ^[a-z0-9][a-z0-9._-]{0,62}$"],
             ex.Failures);
     }
 
@@ -433,9 +471,9 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Outboxes[Orders]: destination 'OrdersTopic' declares an empty Routes set; Routes is null (one address) or names at least one route",
-                "Outboxes[Payments]: destination 'PaymentsTopic' declares route key '-bad'; must match ^[a-z0-9][a-z0-9._-]{0,62}$",
-                "Outboxes[Payments].DeadLetter.Destination: destination 'OrdersTopic' declares Routes. A dead-letter destination has one address.",
+                "OutboxRelay.Outboxes[Orders]: destination 'OrdersTopic' declares an empty Routes set; Routes is null (one address) or names at least one route",
+                "OutboxRelay.Outboxes[Payments]: destination 'PaymentsTopic' declares route key '-bad'; must match ^[a-z0-9][a-z0-9._-]{0,62}$",
+                "OutboxRelay.Outboxes[Payments].DeadLetter.Destination: destination 'OrdersTopic' declares Routes. A dead-letter destination has one address.",
             ],
             ex.Failures);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
@@ -461,8 +499,8 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Destinations[OrdersTopic]: topic 'orders.events' does not exist",
-                "Destinations[PaymentsTopic]: topic 'payments.events' does not exist",
+                "OutboxRelay.Destinations[OrdersTopic]: topic 'orders.events' does not exist",
+                "OutboxRelay.Destinations[PaymentsTopic]: topic 'payments.events' does not exist",
             ],
             ex.Failures);
         Assert.Equal(2, factory.Disposed.Count);
@@ -528,5 +566,5 @@ public sealed class RelayStartupValidatorTests
         }
     }
 
-    private IConfiguration Configuration() => new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+    private RelayConfiguration Configuration() => new(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
 }
