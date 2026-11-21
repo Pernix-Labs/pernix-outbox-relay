@@ -38,7 +38,7 @@ The relay reads its configuration only from the `OutboxRelay` section, through o
 
 - `Pernix.OutboxRelay.Core`, `Pernix.OutboxRelay.PostgreSql`, `Pernix.OutboxRelay.Kafka` and `Pernix.OutboxRelay.Hosting` each pack as a separate package, mirroring the project graph. Kafka's native dependencies (`Confluent.Kafka`, `Nanov.Kafka`, `librdkafka.redist`) flow from the Kafka package. `Pernix.OutboxRelay.Host` is not packed.
 - The relay ships as the image and as the Hosting package, which composes Core, PostgreSQL and Kafka (`AddOutboxRelay`) and offers opt-in `MapOutboxRelayHealth` and `AddOutboxRelayInstrumentation`. Logging, OpenTelemetry exporters and resource, Kestrel, endpoints and `HostOptions` stay with the host.
-- `src/RelayPackage.props` sets one `VersionPrefix` from the repo-root `.version` for all four. CI overrides it with the image's `BUILD_VERSION`, so package and image versions are equal.
+- `src/RelayPackage.props` sets one `VersionPrefix` from the repo-root `.version` for all four. Lockstep with the image holds once the publish job (follow-up, NG8) passes `-p:Version=$BUILD_VERSION` to pack. No such job exists yet, and the Dockerfile `BUILD_VERSION` default (`1.0.0`) is not tied to `.version`.
 - This is a version line separate from the producer client packages of [ADR 0008](./0008-producer-client-packages.md) (`client/PackageVersion.props`). The relay packages follow 0008's packaging precedent (lockstep packages from this repo) but neither line follows the other's version. The publish pipeline is a follow-up.
 
 ## Alternatives considered

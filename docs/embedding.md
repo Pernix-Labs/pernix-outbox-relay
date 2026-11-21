@@ -8,7 +8,7 @@ The relay ships as a container image and as the NuGet package `Pernix.OutboxRela
 dotnet add package Pernix.OutboxRelay.Hosting
 ```
 
-The package targets `net10.0` and needs the ASP.NET Core shared framework (`Microsoft.AspNetCore.App`). It declares that framework reference itself, so a project on `Microsoft.NET.Sdk` gets it on restore. It brings the PostgreSQL provider, the Kafka transport and the native `librdkafka` assets with it. Use the same version for every `Pernix.OutboxRelay.*` relay package. The package version equals the image version.
+The package targets `net10.0` and needs the ASP.NET Core shared framework (`Microsoft.AspNetCore.App`). It declares that framework reference itself, so a project on `Microsoft.NET.Sdk` gets it on restore. It brings the PostgreSQL provider, the Kafka transport and the native `librdkafka` assets with it. Use the same version for every `Pernix.OutboxRelay.*` relay package. The packages take their version prefix from the repo-root `.version`. Matching the image version is a follow-up: it holds once the publish job (NG8) passes `-p:Version=$BUILD_VERSION`. `Pernix.OutboxRelay.Kafka` pins `Nanov.Kafka` `[2.16.0.3]` (with `Confluent.Kafka` 2.16.0), so a host that references other `Confluent.Kafka` or `Nanov.Kafka` versions gets NU1605 or NU1107 restore errors until it aligns its versions.
 
 ## 2. Register
 
