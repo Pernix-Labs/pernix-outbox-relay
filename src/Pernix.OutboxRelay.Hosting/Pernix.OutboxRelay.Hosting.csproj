@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Pernix.OutboxRelay.Hosting</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Api" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pernix.OutboxRelay.Core\Pernix.OutboxRelay.Core.csproj" />
+    <ProjectReference Include="..\Pernix.OutboxRelay.Kafka\Pernix.OutboxRelay.Kafka.csproj" />
+    <ProjectReference Include="..\Pernix.OutboxRelay.PostgreSql\Pernix.OutboxRelay.PostgreSql.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,7 +1,7 @@
 using Pernix.OutboxRelay.Core.Leadership;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace Pernix.OutboxRelay.Host.Health;
+namespace Pernix.OutboxRelay.Hosting.Health;
 
 // Unhealthy while any worker's latest connect attempt failed. Leadership does not affect readiness.
 public sealed class OutboxDatabaseReadinessCheck(OutboxRuntimeState state) : IHealthCheck

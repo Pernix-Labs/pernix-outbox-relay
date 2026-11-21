@@ -1,5 +1,5 @@
 using Pernix.OutboxRelay.Core.Leadership;
-using Pernix.OutboxRelay.Host.Health;
+using Pernix.OutboxRelay.Hosting.Health;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Xunit;
 
@@ -45,7 +45,7 @@ public sealed class OutboxDatabaseReadinessCheckTests
         var check = new OutboxDatabaseReadinessCheck(state);
         var context = new HealthCheckContext
         {
-            Registration = new HealthCheckRegistration("outbox-database", check, HealthStatus.Unhealthy, [HealthTags.Ready]),
+            Registration = new HealthCheckRegistration("outbox-database", check, HealthStatus.Unhealthy, [OutboxRelayHealthChecks.ReadyTag]),
         };
 
         var result = await check.CheckHealthAsync(context, TestContext.Current.CancellationToken);

@@ -8,12 +8,14 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Core\Pernix.OutboxRelay.Core.csproj" />
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Host\Pernix.OutboxRelay.Host.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Hosting\Pernix.OutboxRelay.Hosting.csproj" />
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Kafka\Pernix.OutboxRelay.Kafka.csproj" />
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.PostgreSql\Pernix.OutboxRelay.PostgreSql.csproj" />
     <ProjectReference Include="..\..\client\src\Pernix.OutboxRelay.Client\Pernix.OutboxRelay.Client.csproj" />

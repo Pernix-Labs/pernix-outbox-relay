@@ -1,7 +1,8 @@
 using Pernix.OutboxRelay.Core.Leadership;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 
-namespace Pernix.OutboxRelay.Host.Health;
+namespace Pernix.OutboxRelay.Hosting.Health;
 
 // Unhealthy if any worker loop ended or faulted while the host is not stopping. DB errors never end a loop.
 // Also unhealthy if any worker is past its progress due time.

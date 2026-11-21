@@ -1,6 +1,6 @@
-using Pernix.OutboxRelay.Core.Diagnostics;
 using Pernix.OutboxRelay.Host.Configuration;
-using Pernix.OutboxRelay.Host.Health;
+using Pernix.OutboxRelay.Hosting;
+using Pernix.OutboxRelay.Hosting.Health;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -18,11 +18,11 @@ public static class TelemetryRegistration
                 .AddService(id.ServiceName, serviceVersion: id.Version)
                 .AddEnvironmentVariableDetector())
             .WithTracing(t => t
-                .AddSource(RelayDiagnostics.Name)
-                .AddAspNetCoreInstrumentation(o => o.Filter = ctx => !HealthPaths.All.Contains(ctx.Request.Path.Value ?? string.Empty))
+                .AddOutboxRelayInstrumentation()
+                .AddAspNetCoreInstrumentation(o => o.Filter = ctx => !OutboxRelayHealthChecks.Paths.Contains(ctx.Request.Path.Value ?? string.Empty))
                 .AddOtlpExporter())
             .WithMetrics(m => m
-                .AddMeter(RelayDiagnostics.Name)
+                .AddOutboxRelayInstrumentation()
                 .AddAspNetCoreInstrumentation()
                 .AddRuntimeInstrumentation()
                 .AddOtlpExporter());

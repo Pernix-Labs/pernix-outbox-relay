@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 
-namespace Pernix.OutboxRelay.Host.Health;
+namespace Pernix.OutboxRelay.Hosting.Health;
 
 public sealed class HostLifetimeReadinessCheck(IHostApplicationLifetime lifetime) : IHealthCheck
 {
