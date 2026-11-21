@@ -4,7 +4,8 @@ ARG BASE_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0
 FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
 WORKDIR /src
 
-COPY ["global.json", "Directory.Build.props", "Directory.Packages.props", "NuGet.Config", "./"]
+COPY ["global.json", "Directory.Build.props", "Directory.Packages.props", "NuGet.Config", ".version", "./"]
+COPY ["src/RelayPackage.props", "src/"]
 COPY ["src/Pernix.OutboxRelay.Host/Pernix.OutboxRelay.Host.csproj", "src/Pernix.OutboxRelay.Host/"]
 COPY ["src/Pernix.OutboxRelay.Hosting/Pernix.OutboxRelay.Hosting.csproj", "src/Pernix.OutboxRelay.Hosting/"]
 COPY ["src/Pernix.OutboxRelay.Core/Pernix.OutboxRelay.Core.csproj", "src/Pernix.OutboxRelay.Core/"]

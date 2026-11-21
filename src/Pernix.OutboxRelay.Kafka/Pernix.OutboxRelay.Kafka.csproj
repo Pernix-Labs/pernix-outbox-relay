@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="..\RelayPackage.props" />
+
   <PropertyGroup>
     <RootNamespace>Pernix.OutboxRelay.Kafka</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
