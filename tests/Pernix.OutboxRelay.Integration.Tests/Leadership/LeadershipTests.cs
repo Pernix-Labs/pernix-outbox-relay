@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Pernix.OutboxRelay.Core.Diagnostics;
 using Pernix.OutboxRelay.Core.Leadership;
-using Pernix.OutboxRelay.Host.Telemetry;
 using Pernix.OutboxRelay.Integration.Tests.Kafka;
 using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 using Microsoft.Extensions.DependencyInjection;

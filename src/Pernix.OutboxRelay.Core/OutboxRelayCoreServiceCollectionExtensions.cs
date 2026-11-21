@@ -1,4 +1,5 @@
 using Pernix.OutboxRelay.Core.Configuration;
+using Pernix.OutboxRelay.Core.Diagnostics;
 using Pernix.OutboxRelay.Core.Leadership;
 using Pernix.OutboxRelay.Core.Stats;
 using Microsoft.Extensions.Configuration;
@@ -23,6 +24,7 @@ public static class OutboxRelayCoreServiceCollectionExtensions
         services.AddHostedService<RelayStartupValidator>();
         services.AddHostedService<OutboxWorkerService>();
         services.AddHostedService<OutboxStatsService>();
+        services.AddHostedService<LeaderGaugeRegistration>();
         return services;
     }
 }

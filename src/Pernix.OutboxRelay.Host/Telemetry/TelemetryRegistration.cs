@@ -27,8 +27,6 @@ public static class TelemetryRegistration
                 .AddRuntimeInstrumentation()
                 .AddOtlpExporter());
 
-        builder.Services.AddHostedService<LeaderGaugeRegistration>();
-
         return builder;
     }
 }

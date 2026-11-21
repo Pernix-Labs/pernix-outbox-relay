@@ -1,7 +1,6 @@
 using System.Diagnostics.Metrics;
 using Pernix.OutboxRelay.Core.Diagnostics;
 using Pernix.OutboxRelay.Core.Leadership;
-using Pernix.OutboxRelay.Host.Telemetry;
 using Xunit;
 
 namespace Pernix.OutboxRelay.Unit.Tests.Telemetry;
