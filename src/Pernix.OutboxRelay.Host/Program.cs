@@ -14,6 +14,7 @@ try
 
     builder.Services.Configure<HostOptions>(builder.Configuration.GetSection("HostOptions"));
     builder.AddRelayLogging();
+    builder.Services.AddHostedService<LegacyConfigurationGuard>();
     builder.AddOutboxRelay();
     builder.AddRelayTelemetry(identity);
 
