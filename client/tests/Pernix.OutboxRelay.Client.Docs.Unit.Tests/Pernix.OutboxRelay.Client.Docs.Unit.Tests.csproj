@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Compiles every C# example of docs/client-packages.md and README.md against the net8.0 package assets. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Pernix.OutboxRelay.Client.Docs.Unit.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="dbup-postgresql" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client\Pernix.OutboxRelay.Client.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client.EntityFrameworkCore\Pernix.OutboxRelay.Client.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client.PostgreSql\Pernix.OutboxRelay.Client.PostgreSql.csproj" />
+  </ItemGroup>
+
+</Project>

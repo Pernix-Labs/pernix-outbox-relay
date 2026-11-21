@@ -1,0 +1,26 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Pernix.OutboxRelay.Benchmarks/Pernix.OutboxRelay.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/client/">
+    <Project Path="client/benchmarks/Pernix.OutboxRelay.Client.Benchmarks/Pernix.OutboxRelay.Client.Benchmarks.csproj" />
+    <Project Path="client/src/Pernix.OutboxRelay.Client.EntityFrameworkCore/Pernix.OutboxRelay.Client.EntityFrameworkCore.csproj" />
+    <Project Path="client/src/Pernix.OutboxRelay.Client.PostgreSql/Pernix.OutboxRelay.Client.PostgreSql.csproj" />
+    <Project Path="client/src/Pernix.OutboxRelay.Client/Pernix.OutboxRelay.Client.csproj" />
+    <Project Path="client/tests/Pernix.OutboxRelay.Client.Docs.Unit.Tests/Pernix.OutboxRelay.Client.Docs.Unit.Tests.csproj" />
+    <Project Path="client/tests/Pernix.OutboxRelay.Client.EntityFrameworkCore.Floor.Integration.Tests/Pernix.OutboxRelay.Client.EntityFrameworkCore.Floor.Integration.Tests.csproj" />
+    <Project Path="client/tests/Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests/Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests.csproj" />
+    <Project Path="client/tests/Pernix.OutboxRelay.Client.PostgreSql.Integration.Tests/Pernix.OutboxRelay.Client.PostgreSql.Integration.Tests.csproj" />
+    <Project Path="client/tests/Pernix.OutboxRelay.Client.Unit.Tests/Pernix.OutboxRelay.Client.Unit.Tests.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Pernix.OutboxRelay.Core/Pernix.OutboxRelay.Core.csproj" />
+    <Project Path="src/Pernix.OutboxRelay.Host/Pernix.OutboxRelay.Host.csproj" />
+    <Project Path="src/Pernix.OutboxRelay.Kafka/Pernix.OutboxRelay.Kafka.csproj" />
+    <Project Path="src/Pernix.OutboxRelay.PostgreSql/Pernix.OutboxRelay.PostgreSql.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Pernix.OutboxRelay.Integration.Tests/Pernix.OutboxRelay.Integration.Tests.csproj" />
+    <Project Path="tests/Pernix.OutboxRelay.Unit.Tests/Pernix.OutboxRelay.Unit.Tests.csproj" />
+  </Folder>
+</Solution>

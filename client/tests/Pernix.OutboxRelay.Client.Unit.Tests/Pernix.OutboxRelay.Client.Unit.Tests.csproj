@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Runs the net8.0 package assets on the net10 runtime of the CI runner. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Pernix.OutboxRelay.Client.Unit.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client\Pernix.OutboxRelay.Client.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client.EntityFrameworkCore\Pernix.OutboxRelay.Client.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client.PostgreSql\Pernix.OutboxRelay.Client.PostgreSql.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\tests\contract-vectors\HeaderVectors.cs" Link="ContractVectors\HeaderVectors.cs" />
+    <None Include="..\..\..\tests\contract-vectors\headers.json" Link="contract-vectors\headers.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\..\..\tests\contract-vectors\RouteVectors.cs" Link="ContractVectors\RouteVectors.cs" />
+    <None Include="..\..\..\tests\contract-vectors\routes.json" Link="contract-vectors\routes.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

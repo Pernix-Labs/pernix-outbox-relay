@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Pernix.OutboxRelay.Unit.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Core\Pernix.OutboxRelay.Core.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Host\Pernix.OutboxRelay.Host.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Kafka\Pernix.OutboxRelay.Kafka.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.PostgreSql\Pernix.OutboxRelay.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\client\src\Pernix.OutboxRelay.Client\Pernix.OutboxRelay.Client.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\contract-vectors\HeaderVectors.cs" Link="ContractVectors\HeaderVectors.cs" />
+    <None Include="..\contract-vectors\headers.json" Link="contract-vectors\headers.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\contract-vectors\RouteVectors.cs" Link="ContractVectors\RouteVectors.cs" />
+    <None Include="..\contract-vectors\routes.json" Link="contract-vectors\routes.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

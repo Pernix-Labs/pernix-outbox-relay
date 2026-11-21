@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" VersionOverride="8.0.10" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Npgsql" VersionOverride="8.0.5" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" VersionOverride="8.0.10" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client.EntityFrameworkCore\Pernix.OutboxRelay.Client.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client.PostgreSql\Pernix.OutboxRelay.Client.PostgreSql.csproj" />
+  </ItemGroup>
+
+  <!-- Shared sources from the CPM project. They use only APIs present in EF 8.0, enforced by compiling both projects. -->
+  <ItemGroup>
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\CapturingLoggerProvider.cs" Link="Shared\CapturingLoggerProvider.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\CommandCountingInterceptor.cs" Link="Shared\CommandCountingInterceptor.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\EfBehaviourPinTests.cs" Link="Shared\EfBehaviourPinTests.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\EfPostgreSqlFixture.cs" Link="Shared\EfPostgreSqlFixture.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\EfUnitOfWorkShape.cs" Link="Shared\EfUnitOfWorkShape.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\Item.cs" Link="Shared\Item.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\ItemsDbContext.cs" Link="Shared\ItemsDbContext.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\PoolingTests.cs" Link="Shared\PoolingTests.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\RecordingPublisher.cs" Link="Shared\RecordingPublisher.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\ServiceProviderTests.cs" Link="Shared\ServiceProviderTests.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\ThrowingPublisher.cs" Link="Shared\ThrowingPublisher.cs" />
+  </ItemGroup>
+
+</Project>

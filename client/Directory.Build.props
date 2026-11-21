@@ -1,0 +1,20 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!--
+    Every packable client csproj must set TreatAsLocalProperty="TargetFramework" on its Project element. CI restores and
+    builds the slnx with a global TargetFramework=net10.0, which would otherwise retarget the net8.0 packages (8c954f0).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- Packages target net8.0 on purpose (consumer floor). The EOL warning would fail the build under TreatWarningsAsErrors. -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+
+    <!-- Package metadata. Inert unless a project sets IsPackable. -->
+    <Authors>Pernix</Authors>
+    <Company>Pernix</Company>
+    <RepositoryUrl>https://github.com/Pernix-Labs/pernix-outbox-relay</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>outbox;transactional-outbox;postgresql;kafka</PackageTags>
+  </PropertyGroup>
+</Project>

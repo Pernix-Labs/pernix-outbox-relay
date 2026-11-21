@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Pernix.OutboxRelay.Benchmarks</RootNamespace>
+    <!-- Builds in CI through the slnx, never runs there. -->
+    <IsTestProject>false</IsTestProject>
+    <!-- Gen0/1/2 counts are only readable under workstation non-concurrent GC. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Core\Pernix.OutboxRelay.Core.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Kafka\Pernix.OutboxRelay.Kafka.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.PostgreSql\Pernix.OutboxRelay.PostgreSql.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\sql\postgresql\*.sql" Link="Sql\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

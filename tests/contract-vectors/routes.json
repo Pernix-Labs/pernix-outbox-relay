@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "vectors": [
+    {"id": "RV1", "case": "length 1", "route": "a", "accepts": true},
+    {"id": "RV2", "case": "length 63", "route": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "accepts": true},
+    {"id": "RV3", "case": "length 64", "route": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "accepts": false},
+    {"id": "RV4", "case": "leading digit", "route": "1abc", "accepts": true},
+    {"id": "RV5", "case": "leading '.'", "route": ".a", "accepts": false},
+    {"id": "RV6", "case": "leading '-'", "route": "-a", "accepts": false},
+    {"id": "RV7", "case": "leading '_'", "route": "_a", "accepts": false},
+    {"id": "RV8", "case": "inner '.'", "route": "a.b", "accepts": true},
+    {"id": "RV9", "case": "inner '-'", "route": "a-b", "accepts": true},
+    {"id": "RV10", "case": "inner '_'", "route": "a_b", "accepts": true},
+    {"id": "RV11", "case": "uppercase", "route": "Alerts", "accepts": false},
+    {"id": "RV12", "case": "empty", "route": "", "accepts": false},
+    {"id": "RV13", "case": "space", "route": "a b", "accepts": false},
+    {"id": "RV14", "case": "'/' (reserved)", "route": "a/b", "accepts": false},
+    {"id": "RV15", "case": "'#' (reserved)", "route": "a#b", "accepts": false},
+    {"id": "RV16", "case": "trailing newline (RF2: .NET '$' matches before a final newline, PostgreSQL does not)", "route": "a\n", "accepts": false},
+    {"id": "RV17", "case": "non-ASCII letter", "route": "a\u00e9", "accepts": false},
+    {"id": "RV18", "case": "non-ASCII digit (U+0661)", "route": "a\u0661", "accepts": false},
+    {"id": "RV19", "case": "trailing '.'", "route": "a.", "accepts": true},
+    {"id": "RV20", "case": "single digit", "route": "0", "accepts": true}
+  ]
+}

@@ -1,0 +1,10 @@
+.claude/orca-spec/runs/
+.claude/orca-notes/
+.orca-spec-foreman/
+bin/
+obj/
+TestResults/
+*.user
+.idea/
+.vs/
+BenchmarkDotNet.Artifacts/

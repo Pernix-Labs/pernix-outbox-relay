@@ -1,0 +1,12 @@
+<Project>
+  <!-- No root Directory.Build.targets exists today. If one is added, import it here. -->
+
+  <!-- Package graph guard input: flows to the client unit test output through the project reference. -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(ProjectAssetsFile)"
+          Link="$(AssemblyName).assets.json"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false"
+          Pack="false" />
+  </ItemGroup>
+</Project>

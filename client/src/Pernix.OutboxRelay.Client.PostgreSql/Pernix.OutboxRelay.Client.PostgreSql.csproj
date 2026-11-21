@@ -1,0 +1,36 @@
+<!-- TreatAsLocalProperty: a global TargetFramework (CI restores/builds the slnx with -p:TargetFramework=net10.0) must not retarget this net8.0 package. -->
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="TargetFramework">
+
+  <Import Project="..\..\PackageVersion.props" />
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Pernix.OutboxRelay.Client.PostgreSql</PackageId>
+    <Description>PostgreSQL producer for the Pernix Outbox Relay: publishes outbox rows inside the caller's transaction and ships the outbox DDL.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Floors, not the CPM version. Npgsql 8.0.3 is the lowest 8.0.x without GHSA-x9vc-6hfv-hg8c. -->
+    <PackageReference Include="Npgsql" VersionOverride="8.0.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" VersionOverride="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pernix.OutboxRelay.Client\Pernix.OutboxRelay.Client.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\RouteRules.cs" Link="RouteRules.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Single source of the DDL: linked from sql/, never copied under client/. -->
+    <EmbeddedResource Include="..\..\..\sql\postgresql\V*.sql" LogicalName="Pernix.OutboxRelay.Client.PostgreSql.Sql.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pernix.OutboxRelay.Client.Unit.Tests" />
+  </ItemGroup>
+
+</Project>

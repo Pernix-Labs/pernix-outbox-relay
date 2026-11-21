@@ -1,0 +1,34 @@
+<!-- TreatAsLocalProperty: a global TargetFramework (CI restores/builds the slnx with -p:TargetFramework=net10.0) must not retarget this net8.0 package. -->
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="TargetFramework">
+
+  <Import Project="..\..\PackageVersion.props" />
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Pernix.OutboxRelay.Client.EntityFrameworkCore</PackageId>
+    <Description>Entity Framework Core add-on for the Pernix Outbox Relay client: enqueues outbox messages on a DbContext and writes them at CommitAsync of an EF transaction begun by the context, as the transaction's last writes.</Description>
+    <!-- Pinning would pack CPM test-project versions (e.g. Microsoft.Extensions.DependencyInjection) as nuspec dependencies. -->
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Floor, not the CPM version. EF Relational 8.0.10 is the lowest audit-clean 8.0.x (GHSA-qj66-m88j-hmgj below it). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" VersionOverride="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pernix.OutboxRelay.Client\Pernix.OutboxRelay.Client.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\RouteRules.cs" Link="RouteRules.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pernix.OutboxRelay.Client.Unit.Tests" />
+    <InternalsVisibleTo Include="Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests" />
+    <InternalsVisibleTo Include="Pernix.OutboxRelay.Client.EntityFrameworkCore.Floor.Integration.Tests" />
+  </ItemGroup>
+
+</Project>
