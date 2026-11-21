@@ -1,0 +1,57 @@
+# Journal: 2026-11-21-embeddable-relay
+run: run_978274a29c69
+
+- 2026-11-21T19:53:36Z run-created — run_978274a29c69
+- 2026-11-21T19:53:36Z supervised — task task_6619f94c6b8d dispatch ctx_61a70d3e1260
+- 2026-11-21T19:54:08Z note — requirements task task_e6069b747ceb -> A dispatch ctx_77eaa04adb36 terminal term_7bf6859b-845b-4788-a356-d48cae908fa0
+- 2026-11-21T19:56:34Z gate — ask gate_8ada10af107c on task_e6069b747ceb (status completed): requirements.md approval + Q1-Q5 rulings
+- 2026-11-21T19:57:05Z gate — requirements.md approve (foreman: Q1 throw; Q2 OutboxRelay:ConnectionStrings only; Q3 image fails w/ migration hint, package no root check; Q4 lockstep version, pack only, publish = follow-up; Q5 fixed section)
+- 2026-11-21T19:57:19Z note — fold Q1-Q5 rulings task task_a2a8776093b6 -> A
+- 2026-11-21T19:57:57Z note — requirements.md approved (rulings folded, task_a2a8776093b6)
+- 2026-11-21T19:58:04Z note — design task task_c0debbbf3001 -> A
+- 2026-11-21T20:01:59Z gate — ask gate_72976eb36692 on task_c0debbbf3001 (status completed): design.md approval
+- 2026-11-21T20:02:38Z gate — design.md approve (foreman fold-ins: migration docs cover SSM paths + Helm values; ADR(s) for D1/D3/D5/D7 at closeout)
+- 2026-11-21T20:02:40Z note — fold design notes task task_aa7f1199cb5f -> A
+- 2026-11-21T20:03:09Z note — design.md approved (notes folded)
+- 2026-11-21T20:03:10Z note — dag task task_0c7b28a5cf82 -> A
+- 2026-11-21T20:06:03Z note — tasks.md objections (task 1 missing PostgreSqlOutboxStoreTests.cs; task 8 verify) task task_49dc586510a9 -> A
+- 2026-11-21T20:06:56Z gate — ask gate_ac6d9b926ec2 on task_49dc586510a9 (status completed): tasks.md approval
+- 2026-11-21T20:07:20Z gate — tasks.md approve
+- 2026-11-21T20:07:22Z dag-materialized — 11 created, 0 replaced, 0 orphaned, 0 unchanged (map: .claude/orca-spec/runs/run_978274a29c69/dag-map.json)
+- 2026-11-21T20:07:45Z note — tasks.md approved, DAG materialized (11), A disposed; coord 1 task_9097e49e5076 -> ctx_af207ba63a02
+- 2026-11-21T20:11:37Z note — coord 1: Docker daemon down; told worker to start Docker Desktop and run full integration suite
+- 2026-11-21T20:17:42Z worker_done — coord 1, sha ae132f47dea77435424865229db4dc0fbc4ae65e, unit 1035 / integration 269 green
+- 2026-11-21T20:17:43Z verify-minted — coord 1 round 1, task task_9d53a21d6432
+- 2026-11-21T20:23:23Z verdict — coord 1 APPROVE
+- 2026-11-21T20:29:15Z worker_done — coord 2, sha 99ba4dcf02abca7cf93ae440ffc80b7cc6f4ce2a, also edited LeadershipTests.cs using
+- 2026-11-21T20:29:15Z verify-minted — coord 2 round 1, task task_33c7cad3d070
+- 2026-11-21T20:34:59Z verdict — coord 2 APPROVE
+- 2026-11-21T20:45:08Z worker_done — coord 3, sha 1affa8f3f64116be3261205f3ba90dab6b9f5501, guard left to task 5
+- 2026-11-21T20:45:08Z verify-minted — coord 3 round 1, task task_3b0a331f9235
+- 2026-11-21T20:50:46Z verdict — coord 3 APPROVE
+- 2026-11-21T20:52:59Z worker_done — coord 4, sha 65a5aa99139e99735b71059db9b92bb1ccaf01ef, transitive pinning lists pinned transitives as direct nuspec deps (left as-is)
+- 2026-11-21T20:52:59Z verify-minted — coord 4 round 1, task task_0f04d2ec1138
+- 2026-11-21T20:54:27Z verdict — coord 4 APPROVE
+- 2026-11-21T20:54:27Z note — NG8 follow-up: solution-wide -p:Version also stamps client packages; publish job must pack relay projects separately
+- 2026-11-21T20:59:51Z worker_done — coord 6, sha f27d68dc551aeaaabe28ab28520586b49c9cb5d3, integration 273 green
+- 2026-11-21T20:59:51Z verify-minted — coord 6 round 1, task task_79e1898db75c
+- 2026-11-21T21:01:28Z worker_done — coord 5, sha ecffba7492baa255ee13478182250e66ada6a38d, unit 1057 / integration 276 green
+- 2026-11-21T21:01:28Z verify-minted — coord 5 round 1, task task_9c6dba972a65
+- 2026-11-21T21:06:05Z verdict — coord 6 APPROVE
+- 2026-11-21T21:06:43Z worker_done — coord 7.3, sha 65074eb32e3e567ce73533eba39507b6a655401c
+- 2026-11-21T21:07:21Z verdict — coord 5 APPROVE
+- 2026-11-21T21:09:30Z note — coord 7.1: README snippet in untagged fence (GuideSnippetTests only checks csharp fences); no client test dependency on Hosting
+- 2026-11-21T21:09:50Z worker_done — coord 7.2, sha 1da6e51822b580a37f3c5d81657b86f2756db32d
+- 2026-11-21T21:09:50Z verify-minted — coord 7.2 round 1, task task_86425e54f493
+- 2026-11-21T21:10:56Z verdict — coord 7.2 APPROVE
+- 2026-11-21T21:14:44Z worker_done — coord 7.1, sha 513301908e12ac19933a7b366c8261c41b146933, README snippet untagged fence (O2); full slnx tests green
+- 2026-11-21T21:14:44Z verify-minted — coord 7.1 round 1, task task_a688c34eb943
+- 2026-11-21T21:19:56Z verdict — coord 7.1 APPROVE
+- 2026-11-21T21:21:54Z worker_done — coord 8, sha ff07091d60a613b096e6542e665c7dddabe935d4, ADR 0008 partial-supersede annotation left for closeout
+- 2026-11-21T21:21:55Z verify-minted — coord 8 round 1, task task_3210e5efd843
+- 2026-11-21T21:22:38Z verdict — coord 8 APPROVE
+- 2026-11-21T21:28:06Z worker_done — coord 9, sha d3733791cedcc708deeb419002090a7b38216673, full verification green incl. container smoke
+- 2026-11-21T21:28:06Z verify-minted — coord 9 round 1, task task_c0185407f9f0
+- 2026-11-21T21:40:18Z verdict — coord 9 APPROVE
+- 2026-11-21T21:40:32Z note — all coords approved; closeout task task_c1d2555f5e60 dispatched
+- 2026-11-21T21:42:26Z closeout — closeout worker ecc2b80 (ADR 0008 follow-up, delivery.md rollback note)
