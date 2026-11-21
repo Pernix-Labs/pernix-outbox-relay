@@ -1,8 +1,8 @@
 ---
 status: approved
 createdAt: 2026-11-21T20:45:00Z
-updatedAt: 2026-11-21T20:03:09Z
-approvedAt: 2026-11-21T20:03:09Z
+updatedAt: 2026-11-21T21:46:59Z
+approvedAt: 2026-11-21T21:46:59Z
 ---
 
 # Design: Embeddable relay hosting package
@@ -156,7 +156,7 @@ sequenceDiagram
 ### C6. `LegacyConfigurationGuard` (Host, new, image-only)
 - **Path:** `src/Pernix.OutboxRelay.Host/Configuration/LegacyConfigurationGuard.cs`. `IHostedLifecycleService`; only `StartingAsync` does work.
 - **Pure core:** `internal static IReadOnlyList<string> Find(IConfiguration root)`:
-  - Return empty if `root.GetSection("OutboxRelay").Exists()`.
+  - No short-circuit on `OutboxRelay` section: root keys are checked whether or not `root.GetSection("OutboxRelay").Exists()`, so partial migration (e.g. only `OutboxRelay__ConnectionStrings__Main` moved) fails instead of starting with zero outboxes.
   - For each of `Outboxes`, `Destinations`, `KafkaClusters` with `root.GetSection(key).Exists()`: `"<key>: relay settings moved under OutboxRelay; move to OutboxRelay:<key> (env OutboxRelay__<key>__...)"`.
   - For each distinct `root["Outboxes:<i>:Database:Connection"]` name with `root.GetSection("ConnectionStrings:<name>").Exists()`: `"ConnectionStrings.<name>: move to OutboxRelay:ConnectionStrings:<name> (env OutboxRelay__ConnectionStrings__<name>)"`. Names only, never values.
 - **`StartingAsync`:** `Find(configuration)` non-empty -> throw `RelayStartupValidationException(failures)`.
@@ -185,8 +185,8 @@ app.MapOutboxRelayHealth();
 ### C9. Documentation
 - **`docs/embedding.md` (new):** install, `AddOutboxRelay`, `MapOutboxRelayHealth`, `AddOutboxRelayInstrumentation`, config under `OutboxRelay`, what package does not touch, host implications (Req8 AC3 list).
 - **`README.md`:** two delivery forms, minimal embedding snippet, link to `docs/embedding.md`.
-- **`docs/configuration.md`:** all keys/examples/env vars under `OutboxRelay`; new "Migrating from root-level settings" section (mapping table below, guard message, scenario 3). Migration covers every config source in ADR 0002 layering (appsettings, SSM Parameter Store, Helm env, command line), not only appsettings/env.
-- **`docs/runbook.md`, `docs/runbook-appsettings.example.json`:** `OutboxRelay` section, `OutboxRelay__ConnectionStrings__Main`, upgrade note covering SSM paths and Helm values (per mapping table).
+- **`docs/configuration.md`:** all keys/examples/env vars under `OutboxRelay`; new "Migrating from root-level settings" section (mapping table below, guard message, scenario 3: stale root keys must be removed after migration). Migration covers every config source in ADR 0002 layering (appsettings, SSM Parameter Store, Helm env, command line), not only appsettings/env.
+- **`docs/runbook.md`, `docs/runbook-appsettings.example.json`:** `OutboxRelay` section, `OutboxRelay__ConnectionStrings__Main`, upgrade note covering SSM paths and Helm values (per mapping table) and stating stale root keys must be removed after migration or image startup fails.
 - **`docs/product.md`:** "ships only as an image" -> image and `Pernix.OutboxRelay.Hosting` package. Startup messages in `docs/configuration.md` § Startup validation shown with `OutboxRelay.` prefix.
 
 ## Data Models
@@ -225,8 +225,8 @@ Element models (`RelayOptions`, `OutboxOptions`, `DestinationOptions`, `KafkaClu
    - **Handling:** `LegacyConfigurationGuard` throws before validator.
    - **User Impact:** `StartupFailed` listing each legacy key + target path. Without guard, image would start with zero outboxes (silent no-delivery).
 3. **`OutboxRelay` section present and legacy root keys also present (image).**
-   - **Handling:** guard passes (ruling: check only without section). Root keys ignored.
-   - **User Impact:** only `OutboxRelay` settings apply. Documented in migration notes.
+   - **Handling:** guard fails startup listing each stale root key + target path (foreman ruling: check regardless of section presence). Names only, never values.
+   - **User Impact:** `StartupFailed`, exit `1`. Operator must remove stale root keys after migration. Prevents partial migration from starting with zero outboxes, green health and no delivery. Documented in migration notes.
 4. **`AddOutboxRelay` called twice / mixed with `AddOutboxRelayCore`.**
    - **Handling:** `InvalidOperationException` at registration (D3).
    - **User Impact:** fails at composition, before host build.
@@ -242,7 +242,7 @@ Element models (`RelayOptions`, `OutboxOptions`, `DestinationOptions`, `KafkaClu
 ### Unit Testing
 - **Hosting registration (`tests/Pernix.OutboxRelay.Unit.Tests/Hosting/`):** `AddOutboxRelay` registers `RelayStartupValidator`, `OutboxWorkerService`, `OutboxStatsService`, `LeaderGaugeRegistration` hosted services, `IOutboxStoreProvider` PostgreSql, `IDestinationFactory` Kafka, three health checks with names/tags (via `IOptions<HealthCheckServiceOptions>`). Second call throws `InvalidOperationException`; descriptor count unchanged. `AddOutboxRelayCore` then `AddOutboxRelay` throws. No added descriptor of `ILoggerProvider`, `TracerProvider`, `MeterProvider`, `IConfigureOptions<KestrelServerOptions>`, `IConfigureOptions<LoggerFilterOptions>`.
 - **Telemetry helpers:** OTel SDK `Sdk.CreateTracerProviderBuilder().AddOutboxRelayInstrumentation()` listens to `RelayDiagnostics.ActivitySource`; meter equivalent via in-memory exporter (`OpenTelemetry.Exporter.InMemory`, already central).
-- **`LegacyConfigurationGuard.Find`:** each legacy key alone; connection name referenced + present; section present -> empty; secret value absent from output.
+- **`LegacyConfigurationGuard.Find`:** each legacy key alone; connection name referenced + present; section present + root keys -> non-empty (fails); section present, no root keys -> empty (passes); secret value absent from output.
 - **`RelayStartupValidator`:** prefix applied to every stage; `HostOptions` line unprefixed; connection lookup section-only (root-only string fails).
 - **`PostgreSqlOutboxStoreProvider`:** reads `RelayConfiguration.Section`.
 - **Moved tests:** `Health/*Tests`, `Telemetry/LeaderGaugeTests` change `using` only. Unit test csproj adds Hosting `ProjectReference` (keeps Host for `RelayIdentityTests`, guard tests).
@@ -256,7 +256,7 @@ Element models (`RelayOptions`, `OutboxOptions`, `DestinationOptions`, `KafkaClu
   - Health parity: both hosts `/livez` 200 `/readyz` 200 when healthy; own PostgreSQL container paused (`ReadinessTests` technique) -> both `/readyz` 503, `/livez` 200 (Req7 AC3).
   - Invalid config: embedded host `StartAsync` throws `RelayStartupValidationException` with `OutboxRelay.`-prefixed line (Req7 AC4).
 - **New generic-host test:** `Host.CreateApplicationBuilder()` + `AddOutboxRelay()` delivers one row (no ASP.NET endpoint mapped) -> proves Req2 AC2 / Req1 AC5 path.
-- **Legacy guard:** `RelayFactory().WithRootSettings(legacy root keys)` -> start fails, message names `OutboxRelay` and legacy keys, no connection string value.
+- **Legacy guard:** `RelayFactory().WithRootSettings(legacy root keys)` -> start fails, message names `OutboxRelay` and legacy keys, no connection string value. Same with `WithRelaySettings` (section present) plus `WithRootSettings` stale root keys -> start fails.
 
 ### End-to-End Testing
 - `dotnet pack -c Release` produces 4 nupkgs (`Pernix.OutboxRelay.Core`, `.PostgreSql`, `.Kafka`, `.Hosting`), all version = `.version`, `lib/net10.0`, Hosting nuspec has `frameworkReferences Microsoft.AspNetCore.App` and deps on the three libraries + `OpenTelemetry.Api`; Kafka nuspec depends on `Confluent.Kafka` / `Nanov.Kafka`. Host not packed.

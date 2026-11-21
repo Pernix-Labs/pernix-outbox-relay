@@ -55,3 +55,8 @@ run: run_978274a29c69
 - 2026-11-21T21:40:18Z verdict — coord 9 APPROVE
 - 2026-11-21T21:40:32Z note — all coords approved; closeout task task_c1d2555f5e60 dispatched
 - 2026-11-21T21:42:26Z closeout — closeout worker ecc2b80 (ADR 0008 follow-up, delivery.md rollback note)
+- 2026-11-21T21:45:13Z note — closeout review: F1 major (legacy guard passes partial migration) -> foreman ask; F2-F4 minor -> rework task task_1b32772c831f
+- 2026-11-21T21:45:25Z gate — ask gate_d563ff1b617c on task_c1d2555f5e60 (status completed): Req3 AC6 legacy guard change (review F1)
+- 2026-11-21T21:45:55Z gate — review F1 -> O1 (foreman): image guard checks root relay keys regardless of OutboxRelay presence; package unchanged; A revises Req3 AC6 + design C6/scenario 3, no re-gate; docs say remove stale root keys
+- 2026-11-21T21:45:59Z note — requirements+design -> draft; revision task task_a8045e28969b -> A
+- 2026-11-21T21:46:59Z note — requirements+design re-approved (F1=O1 folded, no re-gate per foreman); minor rework 55b833e

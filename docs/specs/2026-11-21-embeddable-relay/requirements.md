@@ -1,8 +1,8 @@
 ---
 status: approved
 createdAt: 2026-11-21T20:05:00Z
-updatedAt: 2026-11-21T19:57:57Z
-approvedAt: 2026-11-21T19:57:57Z
+updatedAt: 2026-11-21T21:46:59Z
+approvedAt: 2026-11-21T21:46:59Z
 ---
 
 # Requirements: Embeddable relay hosting package
@@ -85,7 +85,7 @@ Current state, relevant facts:
 3. IF `OutboxRelay:ConnectionStrings:<name>` missing or empty THEN startup SHALL fail with current "must exist and be non-empty" failure. Relay SHALL NOT fall back to root `ConnectionStrings:<name>`.
 4. WHEN relay reports config failure THEN message SHALL name setting path including `OutboxRelay` prefix, and SHALL still never contain connection string values, `Producer` values or secrets.
 5. WHEN env var override used THEN `OutboxRelay__Outboxes__0__Polling__BatchSize` style keys SHALL override single settings as root-level keys do today.
-6. IF image (`Pernix.OutboxRelay.Host`) config has root-level `Outboxes`, `Destinations` or `KafkaClusters` and no `OutboxRelay` section THEN image SHALL fail startup (`StartupFailed`, exit `1`) with migration hint naming `OutboxRelay` section and each legacy root key found, including root `ConnectionStrings` entries named by legacy `Outboxes[].Database.Connection`. Hint SHALL NOT contain connection string values.
+6. IF image (`Pernix.OutboxRelay.Host`) config has root-level `Outboxes`, `Destinations` or `KafkaClusters` THEN image SHALL fail startup regardless of whether an `OutboxRelay` section exists (`StartupFailed`, exit `1`) with migration hint naming `OutboxRelay` section and each legacy root key found, including root `ConnectionStrings` entries named by legacy `Outboxes[].Database.Connection`. Hint SHALL name keys only and SHALL NOT contain connection string values. Check is image-only (see AC7).
 7. WHEN package (embedded host) binds config THEN package SHALL perform NO root-level legacy key check, since host may own unrelated root `Outboxes`/`Destinations`/`KafkaClusters`/`ConnectionStrings` keys.
 8. WHEN `HostOptions` read THEN relay SHALL keep reading host's `HostOptions` (root, host-owned), not `OutboxRelay:HostOptions`.
 
