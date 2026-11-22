@@ -1,6 +1,6 @@
 # 0011. Scope relay configuration under `OutboxRelay` and ship the relay as an image and a Hosting package
 
-**Status:** Accepted
+**Status:** Accepted. Superseded in part (D7) by [0012](./0012-lean-hosting-and-role-named-provider-packages.md)
 **Date:** 2026-11-21
 **Deciders:** Apostolos Stephanou
 **Related specs:** [2026-11-21-embeddable-relay](../specs/2026-11-21-embeddable-relay/design.md)
