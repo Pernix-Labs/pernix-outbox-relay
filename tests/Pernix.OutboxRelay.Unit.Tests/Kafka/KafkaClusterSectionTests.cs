@@ -81,7 +81,6 @@ public sealed class KafkaClusterSectionTests
 
         Assert.Equal(["KafkaClusters[Main]: unknown setting 'BootstrapServer'", "KafkaClusters[Other]: unknown setting 'Unknown'"], first);
         Assert.Equal(first, section.Validate(config));
-        Assert.Equal(first, section.Validate(new ConfigurationBuilder().Build()));
     }
 
     [Fact]

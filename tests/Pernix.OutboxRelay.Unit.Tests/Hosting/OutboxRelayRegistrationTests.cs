@@ -53,7 +53,7 @@ public sealed class OutboxRelayRegistrationTests
         {
             ["HostOptions:ShutdownTimeout"] = "00:00:30",
             ["OutboxRelay:ConnectionStrings:OrdersDb"] = "Host=127.0.0.1;Port=1;Database=orders;Username=relay;Password=unused",
-            ["OutboxRelay:KafkaClusters:Main:BootstrapServers"] = "127.0.0.1:1",
+            ["OutboxRelay:KafkaClusters:Main:BootstrapServer"] = "127.0.0.1:1",
             ["OutboxRelay:Destinations:0:Name"] = "OrdersTopic",
             ["OutboxRelay:Destinations:0:Transport"] = "Kafka",
             ["OutboxRelay:Destinations:0:Kafka:Cluster"] = "Main",
