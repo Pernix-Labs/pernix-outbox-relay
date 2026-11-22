@@ -11,3 +11,11 @@ run: run_bd98c5d317e4
 - 2026-11-22T10:06:01Z gate — ask gate_165938ff4c39 on task_93fd7293d2b5 (status completed): approve tasks.md
 - 2026-11-22T10:06:22Z gate — tasks.md approve (foreman)
 - 2026-11-22T10:06:24Z dag-materialized — 7 created, 0 replaced, 0 orphaned, 0 unchanged (map: .claude/orca-spec/runs/run_bd98c5d317e4/dag-map.json)
+- 2026-11-22T10:07:48Z worker_done — coord 7, sha 27d1a59b759a932447d8dde5f6842820ad20f274
+- 2026-11-22T10:07:48Z verify-minted — coord 7 round 1, task task_32ce1fd0a123
+- 2026-11-22T10:08:05Z worker_done — coord 1, sha f4649c3
+- 2026-11-22T10:08:05Z verify-minted — coord 1 round 1, task task_7b3b25e1d6b0
+- 2026-11-22T10:08:56Z rework-minted — coord 7 round 1, task task_686583884222
+- 2026-11-22T10:08:56Z note — standards.md: commit only own task files (task 7 commit swept task 1 renames in shared worktree)
+- 2026-11-22T10:08:59Z note — rework task_686583884222 (coord 7) held until task 1 verify returns: it rewrites history under the running verifier
+- 2026-11-22T10:09:17Z verdict — coord 1 APPROVE
