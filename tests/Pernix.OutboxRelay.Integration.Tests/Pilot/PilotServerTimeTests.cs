@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text;
 using Pernix.OutboxRelay.Core.Configuration;
 using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Xunit;
 using static Pernix.OutboxRelay.Integration.Tests.Pilot.PilotDatasets;
 

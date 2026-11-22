@@ -1,6 +1,6 @@
 using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Core.Configuration;
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Npgsql;
 using Xunit;
 

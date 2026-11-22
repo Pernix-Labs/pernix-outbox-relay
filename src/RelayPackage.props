@@ -1,5 +1,5 @@
 <Project>
-  <!-- One version for all relay library packages (lockstep with the image). Imported by Core, PostgreSql, Kafka, Hosting only. -->
+  <!-- One version for all relay library packages (lockstep with the image). Imported by Core, Outbox.PostgreSql, Destination.Kafka, Hosting only. -->
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <VersionPrefix>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../.version').Trim())</VersionPrefix>

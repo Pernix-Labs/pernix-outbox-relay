@@ -15,7 +15,7 @@ public sealed class PostgreSql18OutboxStoreTests(PostgreSql18Fixture pg18) : ICl
 
         var v = PostgreSqlFixture.NewSchema();
         await PostgreSqlFixture.CreateOutboxSchemaAsync(pg18.ConnectionString, v);
-        await provider.CreateStore(Outbox("Orders", "Db", $"{v}.outbox")).ValidateAsync(Ct);
+        await provider.CreateStore(PostgreSqlOutboxStoreTests.Outbox("Orders", "Db", $"{v}.outbox")).ValidateAsync(Ct);
         Assert.Equal("7/7", await pg18.ScalarAsync<string>(
             $"SELECT count(*) FILTER (WHERE convalidated) || '/' || count(*) FROM pg_catalog.pg_constraint WHERE conrelid = '{v}.outbox'::pg_catalog.regclass AND contype = 'n'"));
 
@@ -32,7 +32,7 @@ public sealed class PostgreSql18OutboxStoreTests(PostgreSql18Fixture pg18) : ICl
         Assert.Equal(1L, await pg18.ScalarAsync<long>($"SELECT count(*) FROM {nv}.outbox WHERE tx_id IS NULL"));
 
         var ex = await Assert.ThrowsAsync<OutboxValidationException>(
-            () => provider.CreateStore(Outbox("Orders", "Db", $"{nv}.outbox")).ValidateAsync(Ct));
+            () => provider.CreateStore(PostgreSqlOutboxStoreTests.Outbox("Orders", "Db", $"{nv}.outbox")).ValidateAsync(Ct));
 
         Assert.Equal($"Outboxes[Orders]: table '{nv}.outbox' columns differ from V001: tx_id xid8 NULL (expected xid8 NOT NULL)", ex.Message);
     }

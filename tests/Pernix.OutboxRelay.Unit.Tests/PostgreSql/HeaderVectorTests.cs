@@ -1,6 +1,6 @@
 using System.Text;
 using Pernix.OutboxRelay.ContractVectors;
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Xunit;
 
 namespace Pernix.OutboxRelay.Unit.Tests.PostgreSql;

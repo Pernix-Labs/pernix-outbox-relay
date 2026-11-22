@@ -1,6 +1,6 @@
 using System.Data;
 using Pernix.OutboxRelay.Core.Abstractions;
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Dapper;
 using Npgsql;
 using Testcontainers.PostgreSql;

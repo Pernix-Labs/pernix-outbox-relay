@@ -1,8 +1,8 @@
 using Pernix.OutboxRelay.Core;
 using Pernix.OutboxRelay.Core.Leadership;
 using Pernix.OutboxRelay.Hosting.Health;
-using Pernix.OutboxRelay.Kafka;
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Destination.Kafka;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 

@@ -1,5 +1,5 @@
 using Pernix.OutboxRelay.Core.Abstractions;
-using Pernix.OutboxRelay.Kafka;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Confluent.Kafka;
 using Xunit;
 

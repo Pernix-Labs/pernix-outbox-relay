@@ -1,4 +1,4 @@
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Npgsql;
 using Xunit;
 

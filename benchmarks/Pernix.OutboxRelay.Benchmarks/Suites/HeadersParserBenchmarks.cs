@@ -1,6 +1,6 @@
 using Pernix.OutboxRelay.Benchmarks.Infrastructure;
 using Pernix.OutboxRelay.Core.Abstractions;
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using BenchmarkDotNet.Attributes;
 
 namespace Pernix.OutboxRelay.Benchmarks.Suites;

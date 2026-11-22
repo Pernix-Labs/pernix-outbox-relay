@@ -4,7 +4,7 @@ using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Core.Configuration;
 using Pernix.OutboxRelay.Integration.Tests.Delivery;
 using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
-using Pernix.OutboxRelay.Kafka;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
