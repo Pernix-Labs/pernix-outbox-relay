@@ -12,6 +12,7 @@ public sealed class RelayStartupValidator(
     RelayConfiguration configuration,
     IEnumerable<IOutboxStoreProvider> providers,
     IEnumerable<IDestinationFactory> factories,
+    IEnumerable<IRelaySectionValidator> sectionValidators,
     ValidatedOutboxes validatedOutboxes,
     IOptions<HostOptions> hostOptions) : IHostedLifecycleService
 {
@@ -32,7 +33,9 @@ public sealed class RelayStartupValidator(
         var resolver = new DestinationFactoryResolver(factories);
 
         var options = RelayOptionsBinder.Bind(configuration.Section);
-        var failures = RelayConfigurationValidator.Validate(options, configuration.Section.GetConnectionString, providersByName, resolver)
+        var sectionFailures = sectionValidators.SelectMany(v => v.Validate(configuration.Section)).ToList();
+        var failures = sectionFailures
+            .Concat(RelayConfigurationValidator.Validate(options, configuration.Section.GetConnectionString, providersByName, resolver))
             .Select(Prefixed)
             .ToList();
         if (hostOptions.Value.ShutdownTimeout < MinShutdownTimeout)

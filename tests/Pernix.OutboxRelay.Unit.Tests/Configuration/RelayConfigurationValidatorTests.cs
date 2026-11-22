@@ -313,7 +313,7 @@ public sealed class RelayConfigurationValidatorTests
         Set("Destinations:1:Database:Connection", "OrdersDb");
         Set("Destinations:1:Database:Table", "public.dead_letter");
 
-        Assert.Equal(["Destinations[OrdersDeadLetter].Transport: transport 'Database' is not implemented in this build"], Validate());
+        Assert.Equal(["Destinations[OrdersDeadLetter].Transport: transport 'Database' is not registered"], Validate());
     }
 
     [Theory]
@@ -377,7 +377,7 @@ public sealed class RelayConfigurationValidatorTests
         Set("Destinations:1:Database:Connection", "OrdersDb");
         Set("Destinations:1:Database:Table", "public.dead_letter");
 
-        Assert.Equal([$"Destinations[OrdersDeadLetter].Transport: transport '{transport}' is not implemented in this build"], Validate());
+        Assert.Equal([$"Destinations[OrdersDeadLetter].Transport: transport '{transport}' is not registered"], Validate());
         Assert.DoesNotContain(factory.Validated, v => v.Destination == "OrdersDeadLetter");
     }
 
@@ -419,7 +419,7 @@ public sealed class RelayConfigurationValidatorTests
             [
                 "Outboxes[Orders].Polling.BatchSize: must be at least 1",
                 "Destinations[OrdersTopic]: unknown setting 'Database'",
-                "Destinations[OrdersDeadLetter].Transport: transport 'Database' is not implemented in this build",
+                "Destinations[OrdersDeadLetter].Transport: transport 'Database' is not registered",
             ],
             Validate());
     }

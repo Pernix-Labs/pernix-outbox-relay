@@ -41,6 +41,7 @@ public sealed class RelayStartupValidatorTests
 
     private readonly FakeOutboxStoreProvider provider = new();
     private readonly FakeDestinationFactory factory = new();
+    private readonly List<IRelaySectionValidator> sectionValidators = [];
     private readonly ValidatedOutboxes validatedOutboxes = new();
     private readonly HostOptions hostOptions = new() { ShutdownTimeout = TimeSpan.FromSeconds(28) };
 
@@ -81,7 +82,7 @@ public sealed class RelayStartupValidatorTests
                 kv.Value)))
             .Build();
         var validator = new RelayStartupValidator(
-            new RelayConfiguration(root.GetSection(RelayConfiguration.SectionName)), [provider], [factory], validatedOutboxes, Options.Create(hostOptions));
+            new RelayConfiguration(root.GetSection(RelayConfiguration.SectionName)), [provider], [factory], sectionValidators, validatedOutboxes, Options.Create(hostOptions));
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(() => validator.StartingAsync(TestContext.Current.CancellationToken));
 
@@ -129,7 +130,25 @@ public sealed class RelayStartupValidatorTests
         Assert.Equal(
             [
                 "OutboxRelay.Destinations[OrdersTopic].Kafka.Topic: required when Transport is Kafka",
-                "OutboxRelay.Destinations[PaymentsTopic].Transport: transport 'Database' is not implemented in this build",
+                "OutboxRelay.Destinations[PaymentsTopic].Transport: transport 'Database' is not registered",
+            ],
+            ex.Failures);
+        Assert.Empty(provider.Stores);
+        Assert.Empty(factory.Created);
+    }
+
+    [Fact]
+    public async Task Section_validator_failures_are_prefixed_and_precede_core_failures()
+    {
+        settings.Remove("Outboxes:0:Destination");
+        sectionValidators.Add(new FakeSectionValidator(["KafkaClusters[Main]: x"]));
+
+        var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
+
+        Assert.Equal(
+            [
+                "OutboxRelay.KafkaClusters[Main]: x",
+                "OutboxRelay.Outboxes[Orders].Destination: required",
             ],
             ex.Failures);
         Assert.Empty(provider.Stores);
@@ -254,7 +273,7 @@ public sealed class RelayStartupValidatorTests
     [Fact]
     public async Task Duplicate_provider_name_is_a_programming_error()
     {
-        var validator = new RelayStartupValidator(Configuration(), [provider, new FakeOutboxStoreProvider("postgresql")], [factory], validatedOutboxes, Options.Create(hostOptions));
+        var validator = new RelayStartupValidator(Configuration(), [provider, new FakeOutboxStoreProvider("postgresql")], [factory], sectionValidators, validatedOutboxes, Options.Create(hostOptions));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => validator.StartingAsync(TestContext.Current.CancellationToken));
     }
@@ -262,7 +281,7 @@ public sealed class RelayStartupValidatorTests
     [Fact]
     public async Task Duplicate_transport_is_a_programming_error()
     {
-        var validator = new RelayStartupValidator(Configuration(), [provider], [factory, new FakeDestinationFactory("kafka")], validatedOutboxes, Options.Create(hostOptions));
+        var validator = new RelayStartupValidator(Configuration(), [provider], [factory, new FakeDestinationFactory("kafka")], sectionValidators, validatedOutboxes, Options.Create(hostOptions));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.StartingAsync(TestContext.Current.CancellationToken));
 
@@ -515,7 +534,7 @@ public sealed class RelayStartupValidatorTests
     [Fact]
     public async Task Other_lifecycle_methods_do_nothing()
     {
-        var validator = new RelayStartupValidator(Configuration(), [provider], [factory], validatedOutboxes, Options.Create(hostOptions));
+        var validator = new RelayStartupValidator(Configuration(), [provider], [factory], sectionValidators, validatedOutboxes, Options.Create(hostOptions));
         var ct = TestContext.Current.CancellationToken;
 
         await validator.StartAsync(ct);
@@ -529,7 +548,12 @@ public sealed class RelayStartupValidatorTests
     }
 
     private Task StartingAsync() =>
-        new RelayStartupValidator(Configuration(), [provider], [factory], validatedOutboxes, Options.Create(hostOptions)).StartingAsync(TestContext.Current.CancellationToken);
+        new RelayStartupValidator(Configuration(), [provider], [factory], sectionValidators, validatedOutboxes, Options.Create(hostOptions)).StartingAsync(TestContext.Current.CancellationToken);
 
     private RelayConfiguration Configuration() => new(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+
+    private sealed class FakeSectionValidator(IReadOnlyList<string> failures) : IRelaySectionValidator
+    {
+        public IReadOnlyList<string> Validate(IConfiguration section) => failures;
+    }
 }
