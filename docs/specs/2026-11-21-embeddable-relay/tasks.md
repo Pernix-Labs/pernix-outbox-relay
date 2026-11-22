@@ -1,7 +1,7 @@
 ---
-status: approved
+status: draft
 createdAt: 2026-11-21T21:15:00Z
-updatedAt: 2026-11-21T21:42:26Z
+updatedAt: 2026-11-22T08:45:00Z
 approvedAt: 2026-11-21T20:07:20Z
 completedAt: 2026-11-21T21:42:26Z
 ---
@@ -65,15 +65,15 @@ Shape: 1 -> 2 -> 3 -> {4, 5, 6} -> {7.1, 7.2, 7.3} -> 8 -> 9. Every code task le
   - Dockerfile restore stage: also `COPY` `src/RelayPackage.props` and `.version` before `dotnet restore`.
   - Do not touch client packages or CI publish config.
 
-- [ ] 5 Image-only `LegacyConfigurationGuard`
+- [ ] 5 Image-only root-key guard (removed per PR review 2026-11-22)
   - Deps: 1, 3
-  - Files: src/Pernix.OutboxRelay.Host/Configuration/LegacyConfigurationGuard.cs, src/Pernix.OutboxRelay.Host/Program.cs, tests/Pernix.OutboxRelay.Unit.Tests/Configuration/LegacyConfigurationGuardTests.cs, tests/Pernix.OutboxRelay.Integration.Tests/Startup/LegacyConfigurationTests.cs
+  - Files: Host root-key guard class, src/Pernix.OutboxRelay.Host/Program.cs, root-key guard unit tests, root-key guard integration tests
   - Verify: dotnet test tests/Pernix.OutboxRelay.Unit.Tests && dotnet test tests/Pernix.OutboxRelay.Integration.Tests; green; new tests prove guard fires before `RelayStartupValidator` and never prints connection string values
   - Purpose: pre-migration image config fails loudly instead of starting with zero outboxes. Refs: requirements.md Req3 AC6-7; design.md D5, C6, Error scenarios 2-3.
-  - `LegacyConfigurationGuard(IConfiguration configuration) : IHostedLifecycleService`, `internal static IReadOnlyList<string> Find(IConfiguration root)` per design.md C6: empty when `root.GetSection("OutboxRelay").Exists()`; one line per existing root `Outboxes` / `Destinations` / `KafkaClusters` (`"<key>: relay settings moved under OutboxRelay; move to OutboxRelay:<key> (env OutboxRelay__<key>__...)"`); one line per distinct root `Outboxes:<i>:Database:Connection` name whose root `ConnectionStrings:<name>` exists (`"ConnectionStrings.<name>: move to OutboxRelay:ConnectionStrings:<name> (env OutboxRelay__ConnectionStrings__<name>)"`). Names only, never values. `StartingAsync` throws `RelayStartupValidationException(failures)` when non-empty; other lifecycle methods no-op.
-  - `Program.cs`: `builder.Services.AddHostedService<LegacyConfigurationGuard>()` immediately before `builder.AddOutboxRelay()`.
-  - Unit tests on `Find`: each legacy key alone, connection name referenced and present, section present -> empty, secret value absent from output.
-  - Integration: `new RelayFactory().WithRootSettings(<root-level Outboxes/Destinations/KafkaClusters/ConnectionStrings>)` -> host start fails; captured message contains `OutboxRelay` and each legacy key; does not contain the connection string value. Root keys + `OutboxRelay` section present -> starts.
+  - Root-key guard `(IConfiguration configuration) : IHostedLifecycleService`, `internal static IReadOnlyList<string> Find(IConfiguration root)` per design.md C6: empty when `root.GetSection("OutboxRelay").Exists()`; one line per existing root `Outboxes` / `Destinations` / `KafkaClusters` (`"<key>: relay settings moved under OutboxRelay; move to OutboxRelay:<key> (env OutboxRelay__<key>__...)"`); one line per distinct root `Outboxes:<i>:Database:Connection` name whose root `ConnectionStrings:<name>` exists (`"ConnectionStrings.<name>: move to OutboxRelay:ConnectionStrings:<name> (env OutboxRelay__ConnectionStrings__<name>)"`). Names only, never values. `StartingAsync` throws `RelayStartupValidationException(failures)` when non-empty; other lifecycle methods no-op.
+  - `Program.cs`: register the root-key guard as a hosted service immediately before `builder.AddOutboxRelay()`.
+  - Unit tests on `Find`: each root-level key alone, connection name referenced and present, section present -> empty, secret value absent from output.
+  - Integration: `new RelayFactory().WithRootSettings(<root-level Outboxes/Destinations/KafkaClusters/ConnectionStrings>)` -> host start fails; captured message contains `OutboxRelay` and each root-level key; does not contain the connection string value. Root keys + `OutboxRelay` section present -> starts.
   - Package (Hosting) gets no guard.
 
 - [ ] 6 Embedded-host parity integration tests
@@ -101,7 +101,7 @@ Shape: 1 -> 2 -> 3 -> {4, 5, 6} -> {7.1, 7.2, 7.3} -> 8 -> 9. Every code task le
   - Files: docs/configuration.md, docs/runbook.md, docs/runbook-appsettings.example.json, tests/Pernix.OutboxRelay.Unit.Tests/Configuration/RunbookExampleTests.cs
   - Verify: dotnet test tests/Pernix.OutboxRelay.Unit.Tests --filter-class "*RunbookExampleTests" green (binds `OutboxRelay` section of example); grep shows no root-level relay key examples left in docs/configuration.md / docs/runbook.md outside the "before" column of migration
   - Purpose: document `OutboxRelay` section and image breaking change. Refs: requirements.md Req8 AC4-6; design.md C9, Migration mapping table.
-  - `docs/configuration.md`: every relay key, example, env override under `OutboxRelay` (`OutboxRelay:ConnectionStrings`, `OutboxRelay__Outboxes__0__Polling__BatchSize`); startup failure messages shown with `OutboxRelay.` prefix and `OutboxRelay.ConnectionStrings` text; new section "Migrating from root-level settings": full design.md mapping table (appsettings, env, SSM paths `.../OutboxRelay/...`, Helm env keys `OutboxRelay__*`, command line), legacy-guard failure text, note that with `OutboxRelay` present root keys are ignored, no root `ConnectionStrings` fallback.
+  - `docs/configuration.md`: every relay key, example, env override under `OutboxRelay` (`OutboxRelay:ConnectionStrings`, `OutboxRelay__Outboxes__0__Polling__BatchSize`); startup failure messages shown with `OutboxRelay.` prefix and `OutboxRelay.ConnectionStrings` text; new section "Migrating from root-level settings": full design.md mapping table (appsettings, env, SSM paths `.../OutboxRelay/...`, Helm env keys `OutboxRelay__*`, command line), root-key guard failure text, note that with `OutboxRelay` present root keys are ignored, no root `ConnectionStrings` fallback.
   - `docs/runbook.md`: `OutboxRelay__ConnectionStrings__Main` from secret; upgrade note for SSM paths + Helm values.
   - `docs/runbook-appsettings.example.json`: relay keys nested under `OutboxRelay`; `HostOptions`/`Kestrel`/`Logging` stay root. `RunbookExampleTests` binds `GetSection("OutboxRelay")` / `new RelayConfiguration(...)`.
 
@@ -117,12 +117,12 @@ Shape: 1 -> 2 -> 3 -> {4, 5, 6} -> {7.1, 7.2, 7.3} -> 8 -> 9. Every code task le
   - Files: docs/architecture/outbox-relay-host.md, docs/adr/0011-relay-config-section-and-hosting-package.md, docs/adr/README.md
   - Verify: ADR follows docs/adr/_template.md; ADR records D1, D3, D5, D7 each with Status Accepted; ADR cross-references docs/adr/0002-load-ssm-config-once-below-env-vars.md; ADR index lists 0011; architecture doc component table names Hosting project and moved types with correct paths
   - Purpose: record design decisions. Refs: design.md Links, D1, D3, D5, D7; docs/specs/README.md § When a spec is "done".
-  - `docs/architecture/outbox-relay-host.md`: add Hosting component (`AddOutboxRelay`, `MapOutboxRelayHealth`, `AddOutboxRelayInstrumentation`, health checks); move `LeaderGauge*` to Core diagnostics row; `Program` row reflects thin composition + `LegacyConfigurationGuard`; Core configuration row: `RelayConfiguration`, `OutboxRelay` section, `OutboxRelay.` failure prefix.
-  - ADR 0011 (one ADR, four decisions): D1 `RelayConfiguration` section scoping under `OutboxRelay` (cross-ref ADR 0002: all layered sources move under `OutboxRelay`); D3 duplicate registration throws; D5 legacy guard image-only (cross-ref ADR 0002); D7 four packable packages, relay ships as image and package, version lockstep with image (cross-ref ADR 0008, separate version line from client packages). Alternatives per design.md.
+  - `docs/architecture/outbox-relay-host.md`: add Hosting component (`AddOutboxRelay`, `MapOutboxRelayHealth`, `AddOutboxRelayInstrumentation`, health checks); move `LeaderGauge*` to Core diagnostics row; `Program` row reflects thin composition + root-key guard; Core configuration row: `RelayConfiguration`, `OutboxRelay` section, `OutboxRelay.` failure prefix.
+  - ADR 0011 (one ADR, four decisions): D1 `RelayConfiguration` section scoping under `OutboxRelay` (cross-ref ADR 0002: all layered sources move under `OutboxRelay`); D3 duplicate registration throws; D5 root-key guard image-only (cross-ref ADR 0002); D7 four packable packages, relay ships as image and package, version lockstep with image (cross-ref ADR 0008, separate version line from client packages). Alternatives per design.md.
   - Index entry in `docs/adr/README.md`.
 
 - [ ] 9 Full verification
   - Deps: 8
   - Files: none
-  - Verify: dotnet build OutboxRelay.slnx -c Release (TreatWarningsAsErrors); dotnet test OutboxRelay.slnx all green; dotnet pack OutboxRelay.slnx -c Release produces 4 relay nupkgs; docker build . succeeds and container with `OutboxRelay`-shaped config serves `/livez` on 5612; container with root-level legacy config exits 1 with `StartupFailed` naming `OutboxRelay`
+  - Verify: dotnet build OutboxRelay.slnx -c Release (TreatWarningsAsErrors); dotnet test OutboxRelay.slnx all green; dotnet pack OutboxRelay.slnx -c Release produces 4 relay nupkgs; docker build . succeeds and container with `OutboxRelay`-shaped config serves `/livez` on 5612; container with root-level config exits 1 with `StartupFailed` naming `OutboxRelay`
   - Purpose: prove requirements.md G1-G7 end to end. No code changes; report any failure with output to coordinator.

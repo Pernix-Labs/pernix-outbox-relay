@@ -1,7 +1,7 @@
 ---
-status: approved
+status: draft
 createdAt: 2026-11-21T20:45:00Z
-updatedAt: 2026-11-22T08:11:01Z
+updatedAt: 2026-11-22T08:45:00Z
 approvedAt: 2026-11-22T08:11:01Z
 ---
 
@@ -86,7 +86,7 @@ sequenceDiagram
 - **D2. `OutboxRelay.` path prefix applied centrally in `RelayStartupValidator`.** Every failure from config, store, probe, bounds stages gets `OutboxRelay.` prepended before `RelayStartupValidationException` thrown. `HostOptions.ShutdownTimeout` failure stays unprefixed (root, host-owned). `RelayConfigurationValidator`, binder, providers, transports keep section-relative paths, so their unit tests stay unchanged. Runtime messages (`Outboxes[x]: session lost`, `stats unavailable`, logs) stay unprefixed: they name outboxes, not settings.
 - **D3. Duplicate registration detected by `ValidatedOutboxes` descriptor.** `AddOutboxRelay` throws `InvalidOperationException` if `services` already has a `ValidatedOutboxes` descriptor (only `AddOutboxRelayCore` registers it). Catches `AddOutboxRelay` twice and `AddOutboxRelayCore` + `AddOutboxRelay`. Check runs before any registration, so nothing duplicated.
 - **D4. `LeaderGaugeRegistration` registered in `AddOutboxRelayCore`.** Moves to Core with `LeaderGauge`; any Core composition reports `outbox.leader`. Hosting gets it through Core (Req1 AC3).
-- **D5. Zero outboxes is a Core config failure, in image and package.** `RelayConfigurationValidator.Validate` adds section-relative `Outboxes: at least one outbox is required` when `options.Outboxes.Count == 0`. `RelayStartupValidator` prefixes it (D2) to `OutboxRelay.Outboxes: at least one outbox is required` and throws in the configuration stage, before store and probe stages. `NoOutboxesConfigured` (EventId 100, `LeadershipLog`) and its call in `RelayStartupValidator` are deleted. No root-level key inspection anywhere: an un-migrated image binds an empty `OutboxRelay` section and fails on this rule. Human ruling 2026-11-22, supersedes the image-only legacy guard.
+- **D5. Zero outboxes is a Core config failure, in image and package.** `RelayConfigurationValidator.Validate` adds section-relative `Outboxes: at least one outbox is required` when `options.Outboxes.Count == 0`. `RelayStartupValidator` prefixes it (D2) to `OutboxRelay.Outboxes: at least one outbox is required` and throws in the configuration stage, before store and probe stages. `NoOutboxesConfigured` (EventId 100, `LeadershipLog`) and its call in `RelayStartupValidator` are deleted. No root-level key inspection anywhere: an un-migrated image binds an empty `OutboxRelay` section and fails on this rule. Human ruling 2026-11-22, supersedes the removed image-only root-key guard.
 - **D6. Telemetry helpers depend on `OpenTelemetry.Api` only.** `TracerProviderBuilder.AddSource` and `MeterProviderBuilder.AddMeter` are API members. No SDK, exporter or instrumentation package in Hosting.
 - **D7. Packages: Core, PostgreSql, Kafka, Hosting each packable, separate packages.** Keeps NuGet graph honest (Kafka native deps flow from Kafka package), matches project graph. No bundling.
 - **D8. Version from `.version`.** `src/RelayPackage.props` sets `VersionPrefix` from repo-root `.version` (`1.0` -> NuGet `1.0.0`). CI overrides with `-p:Version=$(BUILD_VERSION)` so packages equal image version. CI job itself is NG8.
@@ -168,7 +168,7 @@ var app = builder.Build();
 app.MapOutboxRelayHealth();
 // RelayStarting log, RunAsync, catch -> StartupFailed, return 1: unchanged
 ```
-- Deleted from Host: `Health/` folder, `Telemetry/LeaderGauge*.cs`, `Configuration/LegacyConfigurationGuard.cs`, Host `InternalsVisibleTo` for the unit test assembly (only served the guard). Host `.csproj` adds `ProjectReference` Hosting, drops Core/PostgreSql/Kafka direct refs (transitive). This `ProjectReference` set stays unchanged in this revision (human question pending). Keeps OTel SDK/exporter/instrumentation packages.
+- Deleted from Host: `Health/` folder, `Telemetry/LeaderGauge*.cs`, the removed image-only root-key guard, Host `InternalsVisibleTo` for the unit test assembly (only served the guard). Host `.csproj` adds `ProjectReference` Hosting, drops Core/PostgreSql/Kafka direct refs (transitive). This `ProjectReference` set stays unchanged in this revision (human question pending). Keeps OTel SDK/exporter/instrumentation packages.
 
 ### C8. Packaging
 - **`src/RelayPackage.props` (new):** `IsPackable=true`, `VersionPrefix=$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../.version').Trim())`, `Authors`, `RepositoryUrl`, `RepositoryType`, `PackageTags` (as `client/Directory.Build.props`), `PackageReadmeFile` not required. Imported by Core, PostgreSql, Kafka, Hosting csproj.
@@ -179,8 +179,8 @@ app.MapOutboxRelayHealth();
 ### C9. Documentation
 - **`docs/embedding.md` (new):** install, `AddOutboxRelay`, `MapOutboxRelayHealth`, `AddOutboxRelayInstrumentation`, config under `OutboxRelay`, what package does not touch, host implications (Req8 AC3 list).
 - **`README.md`:** two delivery forms, minimal embedding snippet, link to `docs/embedding.md`.
-- **`docs/configuration.md`:** all keys/examples/env vars under `OutboxRelay`; new "Migrating from root-level settings" section (mapping table below; un-migrated image fails with `OutboxRelay.Outboxes: at least one outbox is required`; relay does no key-by-key legacy detection, so root keys left behind are ignored, not reported). Migration covers every config source in ADR 0002 layering (appsettings, SSM Parameter Store, Helm env, command line), not only appsettings/env.
-- **`docs/runbook.md`, `docs/runbook-appsettings.example.json`:** `OutboxRelay` section, `OutboxRelay__ConnectionStrings__Main`, upgrade note covering SSM paths and Helm values (per mapping table) and stating an un-migrated image fails startup with `OutboxRelay.Outboxes: at least one outbox is required`. No key-by-key legacy detection.
+- **`docs/configuration.md`:** all keys/examples/env vars under `OutboxRelay`; new "Migrating from root-level settings" section (mapping table below; un-migrated image fails with `OutboxRelay.Outboxes: at least one outbox is required`; relay does no key-by-key root-level detection, so root keys left behind are ignored, not reported). Migration covers every config source in ADR 0002 layering (appsettings, SSM Parameter Store, Helm env, command line), not only appsettings/env.
+- **`docs/runbook.md`, `docs/runbook-appsettings.example.json`:** `OutboxRelay` section, `OutboxRelay__ConnectionStrings__Main`, upgrade note covering SSM paths and Helm values (per mapping table) and stating an un-migrated image fails startup with `OutboxRelay.Outboxes: at least one outbox is required`. No key-by-key root-level detection.
 - **`docs/product.md`:** "ships only as an image" -> image and `Pernix.OutboxRelay.Hosting` package. Startup messages in `docs/configuration.md` § Startup validation shown with `OutboxRelay.` prefix.
 
 ## Data Models
@@ -237,7 +237,7 @@ Element models (`RelayOptions`, `OutboxOptions`, `DestinationOptions`, `KafkaClu
 - **Hosting registration (`tests/Pernix.OutboxRelay.Unit.Tests/Hosting/`):** `AddOutboxRelay` registers `RelayStartupValidator`, `OutboxWorkerService`, `OutboxStatsService`, `LeaderGaugeRegistration` hosted services, `IOutboxStoreProvider` PostgreSql, `IDestinationFactory` Kafka, three health checks with names/tags (via `IOptions<HealthCheckServiceOptions>`). Second call throws `InvalidOperationException`; descriptor count unchanged. `AddOutboxRelayCore` then `AddOutboxRelay` throws. No added descriptor of `ILoggerProvider`, `TracerProvider`, `MeterProvider`, `IConfigureOptions<KestrelServerOptions>`, `IConfigureOptions<LoggerFilterOptions>`.
 - **Telemetry helpers:** OTel SDK `Sdk.CreateTracerProviderBuilder().AddOutboxRelayInstrumentation()` listens to `RelayDiagnostics.ActivitySource`; meter equivalent via in-memory exporter (`OpenTelemetry.Exporter.InMemory`, already central).
 - **`RelayConfigurationValidator` zero outboxes (new):** empty `Outboxes` -> failure `Outboxes: at least one outbox is required`; one outbox with defined destination -> no such failure; zero outboxes plus other config errors -> all reported.
-- **Deleted:** `LegacyConfigurationGuardTests`.
+- **Deleted:** unit tests for the removed image-only root-key guard.
 - **`RelayStartupValidator`:** prefix applied to every stage; `HostOptions` line unprefixed; connection lookup section-only (root-only string fails). Zero-outbox tests that expected the EventId 100 warning or probing with no outboxes (`No_outboxes_*` in `RelayStartupValidatorTests`) now assert `OutboxRelay.Outboxes: at least one outbox is required` and no probe.
 - **`PostgreSqlOutboxStoreProvider`:** reads `RelayConfiguration.Section`.
 - **Moved tests:** `Health/*Tests`, `Telemetry/LeaderGaugeTests` change `using` only. Unit test csproj adds Hosting `ProjectReference` (keeps Host for `RelayIdentityTests`).
@@ -253,7 +253,7 @@ Element models (`RelayOptions`, `OutboxOptions`, `DestinationOptions`, `KafkaClu
 - **New generic-host test:** `Host.CreateApplicationBuilder()` + `AddOutboxRelay()` delivers one row (no ASP.NET endpoint mapped) -> proves Req2 AC2 / Req1 AC5 path.
 - **Zero outboxes (new):** `RelayFactory` with empty `OutboxRelay` section -> start fails with `OutboxRelay.Outboxes: at least one outbox is required`; image `Program` returns exit `1` with `StartupFailed`.
 - **Tests that started with zero outboxes** (e.g. `RelayFactory()` without outbox settings in `StartupLogTests`, `TracingTests`, `HealthEndpointTests`, `LogSecrecyTests`, `ReadinessTests`, `StartupValidationTests`): add a minimal valid outbox + destination, or assert the new failure where start failure is the subject.
-- **Deleted:** `LegacyConfigurationTests`, `RelayFactory.WithRootSettings` if unused.
+- **Deleted:** integration tests for the removed image-only root-key guard, `RelayFactory.WithRootSettings` if unused.
 
 ### End-to-End Testing
 - `dotnet pack -c Release` produces 4 nupkgs (`Pernix.OutboxRelay.Core`, `.PostgreSql`, `.Kafka`, `.Hosting`), all version = `.version`, `lib/net10.0`, Hosting nuspec has `frameworkReferences Microsoft.AspNetCore.App` and deps on the three libraries + `OpenTelemetry.Api`; Kafka nuspec depends on `Confluent.Kafka` / `Nanov.Kafka`. Host not packed.
@@ -263,6 +263,6 @@ Element models (`RelayOptions`, `OutboxOptions`, `DestinationOptions`, `KafkaClu
 
 - ADRs: [0002](../../adr/0002-load-ssm-config-once-below-env-vars.md) (config layering, unchanged), [0003](../../adr/0003-leadership-by-postgresql-session-advisory-lock.md) (leadership unchanged across embedded replicas), [0008](../../adr/0008-producer-client-packages.md) (client packaging precedent).
 - New ADR(s) at closeout in `docs/adr/`: D1 (`RelayConfiguration` section scoping under `OutboxRelay`), D3 (duplicate registration throws), D7 (four packable packages; relay ships as image and package). D1 ADR cross-references ADR 0002 (all layered sources move under `OutboxRelay`). D7 ADR cross-references ADR 0008 (packaging precedent, separate version lines).
-- ADR 0011 (`docs/adr/0011-relay-config-section-and-hosting-package.md`) revision: drop D5 (legacy guard) and its rejected alternatives. Record new rule: at least one outbox required in Core, image and package, `OutboxRelay.Outboxes: at least one outbox is required`. No root-level key detection.
+- ADR 0011 (`docs/adr/0011-relay-config-section-and-hosting-package.md`) revision: drop D5 (the removed image-only root-key guard) and its rejected alternatives. Record new rule: at least one outbox required in Core, image and package, `OutboxRelay.Outboxes: at least one outbox is required`. No root-level key detection.
 - Related specs: none.
 - Architecture docs: [outbox-relay-host.md](../../architecture/outbox-relay-host.md) (update at closeout: Hosting component, moved types, `OutboxRelay` section).

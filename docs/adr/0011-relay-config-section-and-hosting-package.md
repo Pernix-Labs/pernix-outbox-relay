@@ -12,7 +12,7 @@ The relay ran only as container image `outbox-relay`. Its composition (Core, Pos
 
 Embedding exposes three problems. Root-level relay keys collide with the host's own configuration, `ConnectionStrings` above all. A host can compose the relay twice, which would duplicate workers, locks and hosted services. Existing image deployments carry root-level keys in every layered source of [ADR 0002](./0002-load-ssm-config-once-below-env-vars.md) (appsettings, SSM Parameter Store, Helm env vars, command line), and a moved section would make the image start with zero outboxes and deliver nothing, silently.
 
-Human rulings on the spec: no backward-compatible read of root-level keys in the image (breaking change, migrate), section name fixed as `OutboxRelay`, `OutboxRelay:ConnectionStrings` only with no root fallback, the relay does no root-level key detection, at least one outbox is required in the image and the package (2026-11-22, replacing an image-only legacy-configuration guard), and relay packages version in lockstep with the image.
+Human rulings on the spec: no backward-compatible read of root-level keys in the image (breaking change, migrate), section name fixed as `OutboxRelay`, `OutboxRelay:ConnectionStrings` only with no root fallback, the relay does no root-level key detection, at least one outbox is required in the image and the package (2026-11-22, replacing an image-only root-key guard), and relay packages version in lockstep with the image.
 
 ## Decision
 

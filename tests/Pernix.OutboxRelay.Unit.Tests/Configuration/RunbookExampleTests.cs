@@ -51,7 +51,7 @@ public sealed class RunbookExampleTests
         var configuration = LoadExample();
 
         Assert.True(configuration.GetSection(RelayConfiguration.SectionName).Exists());
-        Assert.DoesNotContain(LegacyRootKeys, key => configuration.GetSection(key).Exists());
+        Assert.DoesNotContain(RootLevelRelayKeys, key => configuration.GetSection(key).Exists());
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class RunbookExampleTests
         Assert.Contains("```json\n" + example + "\n```", runbook, StringComparison.Ordinal);
     }
 
-    private static readonly string[] LegacyRootKeys = ["Outboxes", "Destinations", "KafkaClusters", "ConnectionStrings"];
+    private static readonly string[] RootLevelRelayKeys = ["Outboxes", "Destinations", "KafkaClusters", "ConnectionStrings"];
 
     private static IConfigurationRoot LoadExample() =>
         new ConfigurationBuilder().AddJsonFile(ExamplePath, optional: false, reloadOnChange: false).Build();

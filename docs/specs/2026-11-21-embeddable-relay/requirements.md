@@ -1,7 +1,7 @@
 ---
-status: approved
+status: draft
 createdAt: 2026-11-21T20:05:00Z
-updatedAt: 2026-11-22T08:11:01Z
+updatedAt: 2026-11-22T08:45:00Z
 approvedAt: 2026-11-22T08:11:01Z
 ---
 
@@ -148,7 +148,7 @@ Current state, relevant facts:
 2. WHEN docs updated THEN docs/ SHALL contain embedding guide covering: registration call, opt-in health mapping, opt-in telemetry helpers, what package does not touch (logging, OTel exporters/resource/service name, Kestrel).
 3. WHEN embedding guide written THEN it SHALL document host-app implications: `HostOptions.ShutdownTimeout >= 00:00:28`, relay startup failure aborts whole host, shared process resources (thread pool, memory, native librdkafka, process-wide `LeaderGauge`, DB connections per outbox), net10.0 + ASP.NET Core shared framework requirement, multi-replica leadership unchanged (one leader per outbox across all host replicas).
 4. WHEN `docs/configuration.md` updated THEN all relay settings, examples, env var override examples SHALL use `OutboxRelay` prefix, including `OutboxRelay:ConnectionStrings`.
-5. WHEN migration documented THEN `docs/configuration.md` and `docs/runbook.md` SHALL describe image breaking change with before/after mapping (root `Outboxes`/`Destinations`/`KafkaClusters`/`ConnectionStrings` -> `OutboxRelay:*`, env vars `ConnectionStrings__Main` -> `OutboxRelay__ConnectionStrings__Main`), and SHALL state that an un-migrated image fails startup with `OutboxRelay.Outboxes: at least one outbox is required`. Relay does no key-by-key legacy detection.
+5. WHEN migration documented THEN `docs/configuration.md` and `docs/runbook.md` SHALL describe image breaking change with before/after mapping (root `Outboxes`/`Destinations`/`KafkaClusters`/`ConnectionStrings` -> `OutboxRelay:*`, env vars `ConnectionStrings__Main` -> `OutboxRelay__ConnectionStrings__Main`), and SHALL state that an un-migrated image fails startup with `OutboxRelay.Outboxes: at least one outbox is required`. Relay does no key-by-key root-level detection.
 6. WHEN `docs/runbook-appsettings.example.json` updated THEN it SHALL use `OutboxRelay` section and `RunbookExampleTests` SHALL pass against it.
 7. WHEN `docs/product.md` / `docs/architecture/outbox-relay-host.md` reference "image only" THEN they SHALL reflect package delivery (architecture doc update at closeout per spec workflow).
 
