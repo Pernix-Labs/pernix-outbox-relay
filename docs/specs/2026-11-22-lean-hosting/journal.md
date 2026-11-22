@@ -19,3 +19,21 @@ run: run_bd98c5d317e4
 - 2026-11-22T10:08:56Z note — standards.md: commit only own task files (task 7 commit swept task 1 renames in shared worktree)
 - 2026-11-22T10:08:59Z note — rework task_686583884222 (coord 7) held until task 1 verify returns: it rewrites history under the running verifier
 - 2026-11-22T10:09:17Z verdict — coord 1 APPROVE
+- 2026-11-22T10:10:08Z worker_done — coord 7, sha 536c3b4, history split; task 1 sha now 2e1a811
+- 2026-11-22T10:10:08Z verify-minted — coord 7 round 2, task task_7f59f6859995
+- 2026-11-22T10:10:51Z verdict — coord 7 APPROVE
+- 2026-11-22T10:11:28Z worker_done — coord 2, sha f442902
+- 2026-11-22T10:11:28Z verify-minted — coord 2 round 1, task task_d6a4855b1716
+- 2026-11-22T10:12:19Z verdict — coord 2 APPROVE
+- 2026-11-22T10:12:59Z worker_done — coord 6, sha dc8996b
+- 2026-11-22T10:12:59Z verify-minted — coord 6 round 1, task task_cfbf8a209578
+- 2026-11-22T10:13:49Z verdict — coord 6 APPROVE
+- 2026-11-22T10:16:53Z worker_done — coord 3, sha 21728c7, touched undeclared Hosting/OutboxRelayRegistrationTests.cs (one assertion, task 4 replaces it); serial with 4, no conflict
+- 2026-11-22T10:16:53Z verify-minted — coord 3 round 1, task task_468741cee4c1
+- 2026-11-22T10:18:07Z verdict — coord 3 APPROVE
+- 2026-11-22T10:21:47Z worker_done — coord 4, sha c9e2a6c
+- 2026-11-22T10:21:47Z verify-minted — coord 4 round 1, task task_09a610822ffb
+- 2026-11-22T10:22:57Z verdict — coord 4 APPROVE
+- 2026-11-22T10:45:15Z worker_done — coord 5, sha c513237, librdkafka.redist is a direct Destination.Kafka dep via central transitive pinning (satisfies Req7 AC4)
+- 2026-11-22T10:45:15Z verify-minted — coord 5 round 1, task task_35ecfc8be205
+- 2026-11-22T11:09:35Z verdict — coord 5 APPROVE
