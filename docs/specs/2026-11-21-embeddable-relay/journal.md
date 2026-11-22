@@ -67,3 +67,5 @@ run: run_978274a29c69
 - 2026-11-22T08:08:50Z gate — PR verdict review-comments (human 2026-11-22): remove LegacyConfigurationGuard; Core validation 'at least one outbox is required' for image+package; supersedes F1/O1 and Q3; Host csproj ProjectReference untouched (question pending)
 - 2026-11-22T08:08:55Z note — PR rework: spec revision task_030ce351b126 -> A, code/docs rework task_0214fe5ca929
 - 2026-11-22T08:11:01Z note — requirements+design re-approved per human PR ruling (guard removed, required-outbox rule)
+- 2026-11-22T08:34:14Z note — PR rework 7c3c54b (unit 1049 / integration 276 green); 884eea7 also carries the guard file deletions (staged by worker, swept by C's spec commit)
+- 2026-11-22T08:36:52Z gate — ask gate_483fc68ffc0e on task_c1d2555f5e60 (status completed): PR updated verdict (guard removed, required-outbox rule; review clean; arch doc range fix d3888d6)
