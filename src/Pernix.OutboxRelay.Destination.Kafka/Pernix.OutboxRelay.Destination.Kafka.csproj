@@ -4,6 +4,7 @@
 
   <PropertyGroup>
     <RootNamespace>Pernix.OutboxRelay.Destination.Kafka</RootNamespace>
+    <PackageTags>$(PackageTags);kafka</PackageTags>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 

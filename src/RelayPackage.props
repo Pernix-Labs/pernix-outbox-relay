@@ -8,7 +8,7 @@
     <Company>Pernix</Company>
     <RepositoryUrl>https://github.com/Pernix-Labs/pernix-outbox-relay</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>outbox;transactional-outbox;postgresql;kafka</PackageTags>
+    <PackageTags>outbox;transactional-outbox</PackageTags>
   </PropertyGroup>
 
   <PropertyGroup>

@@ -4,6 +4,7 @@
 
   <PropertyGroup>
     <RootNamespace>Pernix.OutboxRelay.Outbox.PostgreSql</RootNamespace>
+    <PackageTags>$(PackageTags);postgresql</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
