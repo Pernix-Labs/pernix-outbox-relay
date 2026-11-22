@@ -1,11 +1,13 @@
 using System.Diagnostics;
+using Pernix.OutboxRelay.Integration.Tests.Kafka;
+using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 using Microsoft.AspNetCore.TestHost;
 using OpenTelemetry.Trace;
 using Xunit;
 
 namespace Pernix.OutboxRelay.Integration.Tests;
 
-public sealed class TracingTests
+public sealed class TracingTests(PostgreSqlFixture postgres, KafkaFixture kafka)
 {
     private const string AspNetCoreSource = "Microsoft.AspNetCore";
     private const string ControlPath = "/trace-control";
@@ -14,7 +16,8 @@ public sealed class TracingTests
     public async Task Health_request_records_no_aspnetcore_activity()
     {
         var exported = new List<Activity>();
-        await using var factory = new RelayFactory().WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        await using var relay = await new RelayFactory().WithOutboxAsync(postgres, kafka);
+        await using var factory = relay.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
             s.ConfigureOpenTelemetryTracerProvider(t => t.AddInMemoryExporter(exported))));
         using var client = factory.CreateClient();
         var ct = TestContext.Current.CancellationToken;

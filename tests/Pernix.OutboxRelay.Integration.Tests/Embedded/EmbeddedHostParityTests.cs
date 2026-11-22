@@ -108,6 +108,15 @@ public sealed class EmbeddedHostParityTests(PostgreSqlFixture postgres, KafkaFix
         Assert.Contains(validation.Failures, f => f.StartsWith("OutboxRelay.Destinations[Events].Transport: required", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Embedded_host_with_empty_relay_section_fails_to_start()
+    {
+        var exception = await Record.ExceptionAsync(async () => await (await EmbeddedRelayHost.StartAsync(new Dictionary<string, string?>(), Ct)).DisposeAsync());
+
+        var validation = Assert.IsType<RelayStartupValidationException>(exception is AggregateException aggregate ? Assert.Single(aggregate.InnerExceptions) : exception);
+        Assert.Equal(["OutboxRelay.Outboxes: at least one outbox is required"], validation.Failures);
+    }
+
     internal static async Task InsertAsync(string connectionString, string schema, OutboxRow row)
     {
         await using var connection = new NpgsqlConnection(connectionString);

@@ -12,7 +12,7 @@ The relay ran only as container image `outbox-relay`. Its composition (Core, Pos
 
 Embedding exposes three problems. Root-level relay keys collide with the host's own configuration, `ConnectionStrings` above all. A host can compose the relay twice, which would duplicate workers, locks and hosted services. Existing image deployments carry root-level keys in every layered source of [ADR 0002](./0002-load-ssm-config-once-below-env-vars.md) (appsettings, SSM Parameter Store, Helm env vars, command line), and a moved section would make the image start with zero outboxes and deliver nothing, silently.
 
-Human rulings on the spec: no backward-compatible read of root-level keys in the image (breaking change, migrate), section name fixed as `OutboxRelay`, `OutboxRelay:ConnectionStrings` only with no root fallback, the image fails on legacy config with a migration hint while the package does no root check, and relay packages version in lockstep with the image.
+Human rulings on the spec: no backward-compatible read of root-level keys in the image (breaking change, migrate), section name fixed as `OutboxRelay`, `OutboxRelay:ConnectionStrings` only with no root fallback, the relay does no root-level key detection, at least one outbox is required in the image and the package (2026-11-22, replacing an image-only legacy-configuration guard), and relay packages version in lockstep with the image.
 
 ## Decision
 
@@ -30,9 +30,9 @@ The relay reads its configuration only from the `OutboxRelay` section, through o
 
 `AddOutboxRelay` throws `InvalidOperationException("AddOutboxRelay was already called on this service collection.")` when the service collection already has a `ValidatedOutboxes` descriptor. Only `AddOutboxRelayCore` registers it, so the check catches `AddOutboxRelay` twice and `AddOutboxRelayCore` followed by `AddOutboxRelay`. It runs before any registration, so nothing is duplicated. One relay per service collection.
 
-### D5. The legacy-configuration guard is image-only
+### D5. At least one outbox is required, in the image and the package
 
-`LegacyConfigurationGuard` (`src/Pernix.OutboxRelay.Host/Configuration/`) is an `IHostedLifecycleService` registered by the image's `Program` before `AddOutboxRelay`, so its `StartingAsync` runs before `RelayStartupValidator`. When root `Outboxes`, `Destinations`, `KafkaClusters` or a referenced `ConnectionStrings:<name>` exists, whether or not the `OutboxRelay` section is present, it throws `RelayStartupValidationException` listing each legacy key and its target path, naming connection strings by name only. The image logs `StartupFailed` and exits `1`. Checking regardless of the section stops a partial migration from starting with zero outboxes and green health. The guard checks the final DI `IConfiguration`, so it sees every [ADR 0002](./0002-load-ssm-config-once-below-env-vars.md) source and test overrides. The Hosting package has no guard: an embedding host's root keys belong to that host.
+`RelayConfigurationValidator.Validate` (Core) fails with `Outboxes: at least one outbox is required` when no outbox is configured. `RelayStartupValidator` prefixes it to `OutboxRelay.Outboxes: at least one outbox is required` and reports it with the other configuration failures, before the table and destination checks. The image logs `StartupFailed` and exits `1`. An embedding host's start throws `RelayStartupValidationException`. The relay never inspects root-level keys: an unmigrated image binds an empty `OutboxRelay` section and fails on this rule. The `NoOutboxesConfigured` warning (event 100) and the zero-outbox start are removed. The rule that every outbox names a defined destination, probed at startup, is unchanged.
 
 ### D7. Four packable relay packages, version in lockstep with the image
 
@@ -45,20 +45,20 @@ The relay reads its configuration only from the `OutboxRelay` section, through o
 
 - **D1: keyed or replaced `IConfiguration` instead of a typed wrapper.** Ambiguous with the host's root `IConfiguration` and harder to substitute in unit tests. `RelayConfiguration` is explicit and tests build it from a plain `ConfigurationBuilder`.
 - **D1: keep relay keys at the root, or read the section with a root fallback.** Root keys collide with the embedding host, `ConnectionStrings` above all, and a fallback makes the effective source of a connection string unclear. Rejected by ruling.
-- **D1: configurable section name.** No requirement for it, and a fixed name keeps docs, guard and messages simple. Rejected by ruling (NG9).
+- **D1: configurable section name.** No requirement for it, and a fixed name keeps docs and messages simple. Rejected by ruling (NG9).
 - **D3: make a second call a no-op (`TryAdd` everywhere).** Hides a composition mistake and still leaves a mixed `AddOutboxRelayCore` + `AddOutboxRelay` collection half-registered. Throwing at composition fails before the host builds.
-- **D5: guard before `Builder.Build()` in `Program`.** Misses `WebApplicationFactory` and other DI-time configuration overrides and bypasses the existing `StartupFailed` and exit `1` path.
-- **D5: guard in the Hosting package.** Root `Outboxes` or `ConnectionStrings` in an embedding host may be the host's own, so the package would refuse valid hosts. Rejected by ruling.
-- **D5: no guard, rely on documentation.** An unmigrated image would start healthy with zero outboxes and deliver nothing.
+- **D5: start with zero outboxes and log a warning.** An unmigrated image would start healthy and deliver nothing.
+- **D5: detect root-level relay keys and name each one to move.** Rejected by ruling. Root keys in an embedding host may be the host's own, and the required-outbox rule already stops an unmigrated image.
 - **D7: one bundled package.** Hides the native Kafka dependency behind a package that does not match the project graph and forces every transport and provider on every consumer.
 - **D7: independent package versions, or one line shared with the client packages.** Independent versions let package and image drift apart for the same code. Sharing the client line couples two products with different release cadences.
 
 ## Consequences
 
 - A host embeds the relay with `AddOutboxRelay`, and gets the same startup validation, delivery and health checks as the image. The image composes through the same entry points, so no relay registration logic remains in `Host`.
-- Breaking change for every image deployment: all relay keys in appsettings, SSM, Helm values, env vars and command line move under `OutboxRelay`. An unmigrated image fails startup with a message naming each key and its new path. Migration steps are in [`docs/configuration.md`](../configuration.md#migrating-from-root-level-settings).
+- Breaking change for every image deployment: all relay keys in appsettings, SSM, Helm values, env vars and command line move under `OutboxRelay`. An unmigrated image fails startup with `OutboxRelay.Outboxes: at least one outbox is required`. The message does not name the root keys to move. Migration steps are in [`docs/configuration.md`](../configuration.md#migrating-from-root-level-settings).
 - Startup failure text changes: relay lines start with `OutboxRelay.`, and the missing connection string message names `OutboxRelay.ConnectionStrings`. Runtime messages and logs stay unprefixed.
-- An image config with both `OutboxRelay` and legacy root keys fails startup. Operators remove stale root keys from every source after migration.
+- Root relay keys left behind after migration are ignored. Operators remove them from every source.
+- A host or image with no outbox configured does not start.
 - One relay per service collection. Running two relays in one process needs two hosts.
 - Four packages to keep compatible, version and eventually publish. Each relay release is an image and four packages at one version.
 - An embedding host owns telemetry export, log output, endpoint mapping and `HostOptions.ShutdownTimeout` (≥ `00:00:28`). The relay's leadership ([ADR 0003](./0003-leadership-by-postgresql-session-advisory-lock.md)) is unchanged: embedded replicas compete for the same lock as image replicas.

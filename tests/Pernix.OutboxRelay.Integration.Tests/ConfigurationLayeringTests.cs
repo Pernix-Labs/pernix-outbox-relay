@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Pernix.OutboxRelay.Integration.Tests;
 
-public sealed class ConfigurationLayeringTests(RelayFactory factory) : IClassFixture<RelayFactory>
+public sealed class ConfigurationLayeringTests(OutboxRelayFactory factory) : IClassFixture<OutboxRelayFactory>
 {
     [Fact]
     public void Test_settings_file_is_loaded()

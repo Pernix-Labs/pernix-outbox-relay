@@ -123,7 +123,7 @@ This image reads relay settings only under `OutboxRelay`. Before rolling it out,
 - **Mounted appsettings and command line.** Nest the relay sections under `"OutboxRelay"` and prefix command-line keys with `OutboxRelay:`.
 - `HostOptions`, `Kestrel`, `Logging`, `SERVICE_*` and `OTEL_*` do not change.
 
-A pod started with only root-level relay settings logs `StartupFailed` and exits `1`, naming each key to move (section 6e). Startup fails while any root relay key remains, even when `OutboxRelay` keys are set. After the migration, remove the stale root keys from appsettings, SSM parameter paths, Helm env values and the command line.
+A pod started with only root-level relay settings finds no outbox, logs `StartupFailed` with `OutboxRelay.Outboxes: at least one outbox is required` and exits `1` (section 6e). The relay does not name root keys one by one, so use the mapping above. Root keys left behind are ignored. After the migration, remove them from appsettings, SSM parameter paths, Helm env values and the command line.
 
 ## 3. Database prerequisites
 
@@ -246,7 +246,7 @@ Delivery resumes on the next read. Prevent it with `idle_in_transaction_session_
 
 Startup checks are fatal. The pod logs one `StartupFailed` entry (event 2, Critical) and exits 1. The entry lists every failure of the first stage that failed: configuration, then outbox tables and databases, then destinations, then destination bounds and routes ([Startup validation](configuration.md#startup-validation)). Fix every listed failure and restart. A later stage can then report its own failures. Messages name setting paths, outboxes, destinations and tables, never connection string values or secrets. Relay setting paths start with `OutboxRelay.`.
 
-A failure such as `Outboxes: relay settings moved under OutboxRelay; move to OutboxRelay:Outboxes (env OutboxRelay__Outboxes__...)` or `ConnectionStrings.Main: move to OutboxRelay:ConnectionStrings:Main (env OutboxRelay__ConnectionStrings__Main)` means the deployment still uses root-level relay settings. Move them (section 2c).
+`OutboxRelay.Outboxes: at least one outbox is required` means no outbox is configured under `OutboxRelay`. On an upgraded image this usually means the deployment still uses root-level relay settings. Move them (section 2c).
 
 The `Database` transport is removed. A destination with `Transport` `Database` fails startup with `OutboxRelay.Destinations[<name>].Transport: transport 'Database' is not implemented in this build`.
 

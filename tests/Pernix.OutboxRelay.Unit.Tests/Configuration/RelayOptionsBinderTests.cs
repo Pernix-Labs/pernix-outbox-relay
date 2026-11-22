@@ -120,7 +120,8 @@ public sealed class RelayOptionsBinderTests
             ["KafkaClusters:Main:Producer:any:nested"] = "x",
         });
 
-        Assert.Empty(failures);
+        // The only failure is the required-outbox rule, not an unknown setting.
+        Assert.Equal(["Outboxes: at least one outbox is required"], failures);
     }
 
     [Fact]

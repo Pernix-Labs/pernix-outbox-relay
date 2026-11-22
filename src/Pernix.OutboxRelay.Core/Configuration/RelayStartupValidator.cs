@@ -13,8 +13,7 @@ public sealed class RelayStartupValidator(
     IEnumerable<IOutboxStoreProvider> providers,
     IEnumerable<IDestinationFactory> factories,
     ValidatedOutboxes validatedOutboxes,
-    IOptions<HostOptions> hostOptions,
-    ILogger<RelayStartupValidator> logger) : IHostedLifecycleService
+    IOptions<HostOptions> hostOptions) : IHostedLifecycleService
 {
     // The leader closes its session by T0 + 27 s, so the host must wait at least 1 s longer.
     internal static readonly TimeSpan MinShutdownTimeout = OutboxWorker.StopCloseDeadline + TimeSpan.FromSeconds(1);
@@ -45,12 +44,6 @@ public sealed class RelayStartupValidator(
         if (failures.Count > 0)
         {
             throw new RelayStartupValidationException(failures);
-        }
-
-        // No early return: configured destinations are still probed with zero outboxes.
-        if (options.Outboxes.Count == 0)
-        {
-            logger.NoOutboxesConfigured();
         }
 
         var storeFailures = new List<string>();

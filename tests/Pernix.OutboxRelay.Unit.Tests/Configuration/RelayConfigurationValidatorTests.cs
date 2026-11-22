@@ -79,12 +79,29 @@ public sealed class RelayConfigurationValidatorTests
     }
 
     [Fact]
-    public void No_outboxes_is_valid()
+    public void No_outboxes_fails()
     {
         RemoveSection("Outboxes");
         RemoveSection("Destinations");
 
-        Assert.Empty(Validate());
+        Assert.Equal(["Outboxes: at least one outbox is required"], Validate());
+    }
+
+    [Fact]
+    public void No_outboxes_is_reported_with_other_configuration_failures()
+    {
+        RemoveSection("Outboxes");
+        Set("Destinations:0:Transport", null);
+
+        Assert.Equal(["Outboxes: at least one outbox is required", "Destinations[OrdersTopic].Transport: required"], Validate());
+    }
+
+    [Fact]
+    public void Empty_configuration_fails_with_the_required_outbox_rule()
+    {
+        settings.Clear();
+
+        Assert.Equal(["Outboxes: at least one outbox is required"], Validate());
     }
 
     [Theory]

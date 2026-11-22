@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Pernix.OutboxRelay.Integration.Tests.Kafka;
+using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
@@ -8,7 +10,7 @@ using Xunit;
 
 namespace Pernix.OutboxRelay.Integration.Tests;
 
-public sealed class LogSecrecyTests
+public sealed class LogSecrecyTests(PostgreSqlFixture postgres, KafkaFixture kafka)
 {
     private const string SecretKey = "Secret:Sentinel";
 
@@ -17,7 +19,8 @@ public sealed class LogSecrecyTests
     {
         var sentinel = Guid.NewGuid().ToString("N");
         var provider = new CapturingLoggerProvider();
-        await using var factory = new RelayFactory().WithWebHostBuilder(b => b
+        await using var relay = await new RelayFactory().WithOutboxAsync(postgres, kafka);
+        await using var factory = relay.WithWebHostBuilder(b => b
             .UseSetting(SecretKey, sentinel)
             .ConfigureTestServices(s => s.AddSingleton<ILoggerProvider>(provider)));
 

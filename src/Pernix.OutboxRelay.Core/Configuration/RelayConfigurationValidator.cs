@@ -22,6 +22,10 @@ public static class RelayConfigurationValidator
         var failures = new List<string>();
         var destinations = options.Destinations.Select((d, i) => (Options: d, Path: PathOf("Destinations", d.Name, i))).ToList();
         var outboxes = options.Outboxes.Select((o, i) => (Options: o, Path: PathOf("Outboxes", o.Name, i))).ToList();
+        if (outboxes.Count == 0)
+        {
+            failures.Add("Outboxes: at least one outbox is required");
+        }
 
         foreach (var (d, path) in destinations)
         {

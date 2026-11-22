@@ -280,6 +280,38 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
     }
 
     [Fact]
+    public async Task Empty_relay_section_refuses_to_start()
+    {
+        var failures = await StartFailuresAsync(new Dictionary<string, string?>());
+
+        Assert.Equal(["OutboxRelay.Outboxes: at least one outbox is required"], failures);
+    }
+
+    // The bootstrap logger writes StartupFailed as JSON to stdout, without the event name. Other tests' console lines may interleave, so match on content.
+    [Fact]
+    public async Task Empty_relay_section_exits_with_code_1_and_logs_startup_failed()
+    {
+        var original = Console.Out;
+        using var output = new StringWriter();
+        Console.SetOut(TextWriter.Synchronized(output));
+        int exitCode;
+        try
+        {
+            exitCode = await RunProgramAsync(new Dictionary<string, string?>());
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains(
+            output.ToString().Split('\n'),
+            line => line.Contains("\"Message\":\"Relay startup failed\"", StringComparison.Ordinal)
+                && line.Contains("OutboxRelay.Outboxes: at least one outbox is required", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Valid_configuration_starts_and_is_ready()
     {
         var settings = RelayFactory.OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (RelayFactory.NewOutboxName(), await postgres.CreateOutboxAsync()));

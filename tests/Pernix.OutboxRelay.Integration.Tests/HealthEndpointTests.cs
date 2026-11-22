@@ -1,11 +1,13 @@
 using System.Net;
+using Pernix.OutboxRelay.Integration.Tests.Kafka;
+using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Pernix.OutboxRelay.Integration.Tests;
 
-public sealed class HealthEndpointTests(RelayFactory factory) : IClassFixture<RelayFactory>
+public sealed class HealthEndpointTests(OutboxRelayFactory factory, PostgreSqlFixture postgres, KafkaFixture kafka) : IClassFixture<OutboxRelayFactory>
 {
     [Theory]
     [InlineData("/livez")]
@@ -40,7 +42,7 @@ public sealed class HealthEndpointTests(RelayFactory factory) : IClassFixture<Re
     [Fact]
     public async Task Readyz_returns_503_once_application_is_stopping()
     {
-        await using var stoppingFactory = new RelayFactory();
+        await using var stoppingFactory = await new RelayFactory().WithOutboxAsync(postgres, kafka);
         using var client = stoppingFactory.CreateClient();
         var lifetime = stoppingFactory.Services.GetRequiredService<IHostApplicationLifetime>();
 
