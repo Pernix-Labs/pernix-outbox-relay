@@ -11,7 +11,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Pernix.OutboxRelay.PostgreSql;
 
-public sealed class PostgreSqlOutboxStoreProvider(IConfiguration configuration) : IOutboxStoreProvider
+public sealed class PostgreSqlOutboxStoreProvider(RelayConfiguration configuration) : IOutboxStoreProvider
 {
     public const string ProviderName = "PostgreSql";
 
@@ -34,7 +34,7 @@ public sealed class PostgreSqlOutboxStoreProvider(IConfiguration configuration) 
         var connectionName = options.Database.Connection
             ?? throw new InvalidOperationException($"Outboxes[{name}].Database.Connection is required.");
 
-        var configured = configuration.GetConnectionString(connectionName);
+        var configured = configuration.Section.GetConnectionString(connectionName);
         if (string.IsNullOrEmpty(configured))
         {
             throw new InvalidOperationException($"Outboxes[{name}].Database.Connection: connection '{connectionName}' is not configured.");

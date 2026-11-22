@@ -3,7 +3,7 @@
 ## Product Purpose
 Services that change their database and then publish an event lose that event when the publish fails after the commit. The consumers then work from stale data until the next change. For example, a service that publishes configuration snapshots on a best-effort basis after commit leaves its consumers with a stale cache when a publish fails.
 
-The Outbox Relay fixes this with the transactional outbox pattern, delivered as one container image. A producer inserts a row into an outbox table in the same transaction as its business change, so the message exists if and only if the change committed. The relay polls the outbox tables and delivers each message to a Kafka topic, at least once, in the configured order. Producers integrate with plain SQL or the producer client packages, published as NuGet from this repo; the relay itself ships only as an image.
+The Outbox Relay fixes this with the transactional outbox pattern, delivered as a container image or as the `Pernix.OutboxRelay.Hosting` NuGet package for embedding in a host. A producer inserts a row into an outbox table in the same transaction as its business change, so the message exists if and only if the change committed. The relay polls the outbox tables and delivers each message to a Kafka topic, at least once, in the configured order. Producers integrate with plain SQL or the producer client packages, published as NuGet from this repo; the relay itself ships as an image and as the `Pernix.OutboxRelay.Hosting` NuGet package.
 
 ## Target Users
 - **Producing teams (domains).** Need durable event publishing without a framework or language lock-in. They write outbox rows in SQL or through the producer client packages.
@@ -17,7 +17,7 @@ The Outbox Relay fixes this with the transactional outbox pattern, delivered as 
 4. Retries with backoff, dead-lettering, and an option to block a key or a whole outbox until an operator acts.
 5. Separate handling of message faults, which spend retries, and destination faults, which pause the outbox without spending retries.
 6. One leader per outbox, chosen by a database lock. A second replica takes over within seconds.
-7. Configured only: one image.
+7. Configured only: one image or one package reference.
 8. Metrics for head age, pending rows, gate lag, retrying and blocked rows, deliveries, faults and leadership.
 
 ## Business Objectives

@@ -1,6 +1,7 @@
 using Pernix.OutboxRelay.Core.Leadership;
+using Microsoft.Extensions.Hosting;
 
-namespace Pernix.OutboxRelay.Host.Telemetry;
+namespace Pernix.OutboxRelay.Core.Diagnostics;
 
 public sealed class LeaderGaugeRegistration(OutboxRuntimeState state) : IHostedService, IDisposable
 {

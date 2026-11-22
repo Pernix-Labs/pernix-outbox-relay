@@ -1,6 +1,8 @@
 using Pernix.OutboxRelay.Core.Configuration;
+using Pernix.OutboxRelay.Core.Diagnostics;
 using Pernix.OutboxRelay.Core.Leadership;
 using Pernix.OutboxRelay.Core.Stats;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -12,6 +14,8 @@ public static class OutboxRelayCoreServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.TryAddSingleton(sp =>
+            new RelayConfiguration(sp.GetRequiredService<IConfiguration>().GetSection(RelayConfiguration.SectionName)));
         services.AddSingleton<ValidatedOutboxes>();
         services.AddSingleton<OutboxRuntimeState>();
         services.TryAddSingleton<ILeadershipJitter, RandomLeadershipJitter>();
@@ -20,6 +24,7 @@ public static class OutboxRelayCoreServiceCollectionExtensions
         services.AddHostedService<RelayStartupValidator>();
         services.AddHostedService<OutboxWorkerService>();
         services.AddHostedService<OutboxStatsService>();
+        services.AddHostedService<LeaderGaugeRegistration>();
         return services;
     }
 }

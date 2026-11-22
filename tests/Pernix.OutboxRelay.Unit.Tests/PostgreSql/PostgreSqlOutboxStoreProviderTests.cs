@@ -18,7 +18,7 @@ public sealed class PostgreSqlOutboxStoreProviderTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Db"] = connectionString })
             .Build();
-        var provider = new PostgreSqlOutboxStoreProvider(configuration);
+        var provider = new PostgreSqlOutboxStoreProvider(new RelayConfiguration(configuration));
         var outbox = new OutboxOptions
         {
             Name = "Orders",
@@ -36,12 +36,25 @@ public sealed class PostgreSqlOutboxStoreProviderTests
     }
 
     [Fact]
+    public void Root_connection_string_outside_the_section_is_not_read()
+    {
+        var root = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Db"] = "Host=db" })
+            .Build();
+        var provider = new PostgreSqlOutboxStoreProvider(new RelayConfiguration(root.GetSection(RelayConfiguration.SectionName)));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => provider.CreateStore(Outbox("Orders")));
+
+        Assert.Equal("Outboxes[Orders].Database.Connection: connection 'Db' is not configured.", ex.Message);
+    }
+
+    [Fact]
     public void Stores_from_one_provider_share_its_table_owner_map()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Db"] = "Host=db" })
             .Build();
-        var provider = new PostgreSqlOutboxStoreProvider(configuration);
+        var provider = new PostgreSqlOutboxStoreProvider(new RelayConfiguration(configuration));
         var first = provider.CreateStore(Outbox("Orders"));
         var second = provider.CreateStore(Outbox("Payments"));
 
@@ -53,7 +66,7 @@ public sealed class PostgreSqlOutboxStoreProviderTests
     public void Registration_adds_one_provider()
     {
         using var services = new ServiceCollection()
-            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddSingleton(new RelayConfiguration(new ConfigurationBuilder().Build()))
             .AddPostgreSqlOutboxProvider()
             .AddPostgreSqlOutboxProvider()
             .BuildServiceProvider();

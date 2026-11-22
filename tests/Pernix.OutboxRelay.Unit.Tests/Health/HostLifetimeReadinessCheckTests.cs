@@ -1,4 +1,4 @@
-using Pernix.OutboxRelay.Host.Health;
+using Pernix.OutboxRelay.Hosting.Health;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Xunit;
@@ -39,7 +39,7 @@ public sealed class HostLifetimeReadinessCheckTests
         var check = new HostLifetimeReadinessCheck(lifetime);
         var context = new HealthCheckContext
         {
-            Registration = new HealthCheckRegistration("host-lifetime", check, HealthStatus.Unhealthy, [HealthTags.Ready]),
+            Registration = new HealthCheckRegistration("host-lifetime", check, HealthStatus.Unhealthy, [OutboxRelayHealthChecks.ReadyTag]),
         };
 
         var result = await check.CheckHealthAsync(context, TestContext.Current.CancellationToken);

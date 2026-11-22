@@ -93,3 +93,7 @@ The Q3 bullet above says the "Dapper for data access" ruling of ADR 0005 covers 
 ## Follow-up 2026-11-11: V002 drops columns (spec 2026-11-11-remove-database-destination)
 
 Two clauses above no longer hold. They are superseded by [ADR 0010](./0010-remove-database-destination.md). The route amendment's "Later schema changes return to additive `Vnnn` scripts" has one exception: V002 is destructive and drops the six destination-only columns (client 2.0.0). The D13 rule that `OutboxColumns` has one constant per V001 column and `All` equals the columns V001 creates now reads against V001 and V002: `All` lists the 10 columns left after V002. The rest of this ADR stands.
+
+## Follow-up 2026-11-21: relay ships as image and packages (spec 2026-11-21-embeddable-relay)
+
+The Decision's "The relay ships as an image only" no longer holds. It is superseded by [ADR 0011](./0011-relay-config-section-and-hosting-package.md): the relay ships as the image and as four lockstep packages (`Pernix.OutboxRelay.Core`, `Pernix.OutboxRelay.PostgreSql`, `Pernix.OutboxRelay.Kafka`, `Pernix.OutboxRelay.Hosting`) on a version line separate from the client packages. The rest of this ADR stands.

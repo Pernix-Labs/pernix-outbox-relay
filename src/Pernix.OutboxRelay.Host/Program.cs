@@ -1,10 +1,7 @@
-using Pernix.OutboxRelay.Core;
 using Pernix.OutboxRelay.Host.Configuration;
-using Pernix.OutboxRelay.Host.Health;
 using Pernix.OutboxRelay.Host.Logging;
 using Pernix.OutboxRelay.Host.Telemetry;
-using Pernix.OutboxRelay.Kafka;
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Hosting;
 
 using var bootstrapLoggerFactory = LoggingRegistration.CreateBootstrapLoggerFactory();
 var bootstrapLogger = bootstrapLoggerFactory.CreateLogger("Pernix.OutboxRelay.Host");
@@ -17,12 +14,11 @@ try
 
     builder.Services.Configure<HostOptions>(builder.Configuration.GetSection("HostOptions"));
     builder.AddRelayLogging();
-    builder.Services.AddOutboxRelayCore().AddPostgreSqlOutboxProvider().AddKafkaTransport();
-    builder.AddRelayHealth();
+    builder.AddOutboxRelay();
     builder.AddRelayTelemetry(identity);
 
     var app = builder.Build();
-    app.MapRelayHealth();
+    app.MapOutboxRelayHealth();
 
     app.Logger.RelayStarting(
         identity.ServiceName,

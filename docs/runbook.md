@@ -14,103 +14,116 @@ Deploying and running the relay with a PostgreSQL outbox and a Kafka destination
 
 ### 2a. appsettings
 
-One `PerKey` outbox on table `public.outbox`, delivering to Kafka destination `Snapshots`, with dead letters to Kafka destination `SnapshotsDlq`. The file is [`docs/runbook-appsettings.example.json`](runbook-appsettings.example.json). `RunbookExampleTests` binds and validates it, and checks that this section embeds it verbatim.
+One `PerKey` outbox on table `public.outbox`, delivering to Kafka destination `Snapshots`, with dead letters to Kafka destination `SnapshotsDlq`. Relay settings sit under the `OutboxRelay` section. The file is [`docs/runbook-appsettings.example.json`](runbook-appsettings.example.json). `RunbookExampleTests` binds and validates it, and checks that this section embeds it verbatim.
 
 ```json
 {
-  "KafkaClusters": {
-    "Main": {
-      "BootstrapServers": "b-1.msk:9092,b-2.msk:9092",
-      "Producer": {
-        "security.protocol": "PLAINTEXT"
-      }
-    }
-  },
-  "Destinations": [
-    {
-      "Name": "Snapshots",
-      "Transport": "Kafka",
-      "Kafka": {
-        "Cluster": "Main",
-        "Topic": "riskbackoffice.snapshots"
+  "OutboxRelay": {
+    "KafkaClusters": {
+      "Main": {
+        "BootstrapServers": "b-1.msk:9092,b-2.msk:9092",
+        "Producer": {
+          "security.protocol": "PLAINTEXT"
+        }
       }
     },
-    {
-      "Name": "SnapshotsDlq",
-      "Transport": "Kafka",
-      "Kafka": {
-        "Cluster": "Main",
-        "Topic": "riskbackoffice.snapshots.dlq"
+    "Destinations": [
+      {
+        "Name": "Snapshots",
+        "Transport": "Kafka",
+        "Kafka": {
+          "Cluster": "Main",
+          "Topic": "riskbackoffice.snapshots"
+        }
+      },
+      {
+        "Name": "SnapshotsDlq",
+        "Transport": "Kafka",
+        "Kafka": {
+          "Cluster": "Main",
+          "Topic": "riskbackoffice.snapshots.dlq"
+        }
       }
-    }
-  ],
-  "Outboxes": [
-    {
-      "Name": "ConfigSnapshots",
-      "Destination": "Snapshots",
-      "Database": {
-        "Provider": "PostgreSql",
-        "Connection": "Main",
-        "Table": "public.outbox"
-      },
-      "Polling": {
-        "Interval": "00:00:01",
-        "BatchSize": 500
-      },
-      "Retry": {
-        "MaxRetryAttempts": 3,
-        "InitialDelay": "00:00:10",
-        "BackoffMultiplier": 2.0,
-        "MaxDelay": "00:05:00"
-      },
-      "DeadLetter": {
-        "Destination": "SnapshotsDlq"
-      },
-      "Ordering": {
-        "Mode": "PerKey",
-        "OnPermanentFailure": "Continue"
+    ],
+    "Outboxes": [
+      {
+        "Name": "ConfigSnapshots",
+        "Destination": "Snapshots",
+        "Database": {
+          "Provider": "PostgreSql",
+          "Connection": "Main",
+          "Table": "public.outbox"
+        },
+        "Polling": {
+          "Interval": "00:00:01",
+          "BatchSize": 500
+        },
+        "Retry": {
+          "MaxRetryAttempts": 3,
+          "InitialDelay": "00:00:10",
+          "BackoffMultiplier": 2.0,
+          "MaxDelay": "00:05:00"
+        },
+        "DeadLetter": {
+          "Destination": "SnapshotsDlq"
+        },
+        "Ordering": {
+          "Mode": "PerKey",
+          "OnPermanentFailure": "Continue"
+        }
       }
-    }
-  ]
+    ]
+  }
 }
 ```
 
-- `ConnectionStrings:Main` is not in the file. It holds a password, so it comes from a Kubernetes secret as env var `ConnectionStrings__Main`. Startup refuses an empty or missing value.
-- The image ships `appsettings.json` with the diagnostics listener and `HostOptions:ShutdownTimeout` `00:00:28`. Mount the domain settings as `/app/appsettings.Production.json` (the ASP.NET Core default environment is `Production`), or set them as env vars (2b).
+- `OutboxRelay:ConnectionStrings:Main` is not in the file. It holds a password, so it comes from a Kubernetes secret as env var `OutboxRelay__ConnectionStrings__Main`. A root `ConnectionStrings__Main` is not read. Startup refuses an empty or missing value.
+- The image ships `appsettings.json` with the diagnostics listener and `HostOptions:ShutdownTimeout` `00:00:28`. `HostOptions`, `Kestrel` and `Logging` stay at the root. Mount the domain settings as `/app/appsettings.Production.json` (the ASP.NET Core default environment is `Production`), or set them as env vars (2b).
 - The topics must exist before the first start. `SnapshotsDlq` must not be compacted. Startup describes both and refuses a missing topic or a compacted dead-letter topic.
 - `Ordering.OnPermanentFailure` `Continue` dead-letters a permanently failed row and moves on. `Block` holds its key until an operator acts (section 6c).
 
 ### 2b. The same settings as environment variables
 
 ```sh
-ConnectionStrings__Main=<from secret>
-KafkaClusters__Main__BootstrapServers=b-1.msk:9092,b-2.msk:9092
-KafkaClusters__Main__Producer__security.protocol=PLAINTEXT
-Destinations__0__Name=Snapshots
-Destinations__0__Transport=Kafka
-Destinations__0__Kafka__Cluster=Main
-Destinations__0__Kafka__Topic=riskbackoffice.snapshots
-Destinations__1__Name=SnapshotsDlq
-Destinations__1__Transport=Kafka
-Destinations__1__Kafka__Cluster=Main
-Destinations__1__Kafka__Topic=riskbackoffice.snapshots.dlq
-Outboxes__0__Name=ConfigSnapshots
-Outboxes__0__Destination=Snapshots
-Outboxes__0__Database__Provider=PostgreSql
-Outboxes__0__Database__Connection=Main
-Outboxes__0__Database__Table=public.outbox
-Outboxes__0__Polling__Interval=00:00:01
-Outboxes__0__Polling__BatchSize=500
-Outboxes__0__Retry__MaxRetryAttempts=3
-Outboxes__0__Retry__InitialDelay=00:00:10
-Outboxes__0__Retry__BackoffMultiplier=2.0
-Outboxes__0__Retry__MaxDelay=00:05:00
-Outboxes__0__DeadLetter__Destination=SnapshotsDlq
-Outboxes__0__Ordering__Mode=PerKey
-Outboxes__0__Ordering__OnPermanentFailure=Continue
+OutboxRelay__ConnectionStrings__Main=<from secret>
+OutboxRelay__KafkaClusters__Main__BootstrapServers=b-1.msk:9092,b-2.msk:9092
+OutboxRelay__KafkaClusters__Main__Producer__security.protocol=PLAINTEXT
+OutboxRelay__Destinations__0__Name=Snapshots
+OutboxRelay__Destinations__0__Transport=Kafka
+OutboxRelay__Destinations__0__Kafka__Cluster=Main
+OutboxRelay__Destinations__0__Kafka__Topic=riskbackoffice.snapshots
+OutboxRelay__Destinations__1__Name=SnapshotsDlq
+OutboxRelay__Destinations__1__Transport=Kafka
+OutboxRelay__Destinations__1__Kafka__Cluster=Main
+OutboxRelay__Destinations__1__Kafka__Topic=riskbackoffice.snapshots.dlq
+OutboxRelay__Outboxes__0__Name=ConfigSnapshots
+OutboxRelay__Outboxes__0__Destination=Snapshots
+OutboxRelay__Outboxes__0__Database__Provider=PostgreSql
+OutboxRelay__Outboxes__0__Database__Connection=Main
+OutboxRelay__Outboxes__0__Database__Table=public.outbox
+OutboxRelay__Outboxes__0__Polling__Interval=00:00:01
+OutboxRelay__Outboxes__0__Polling__BatchSize=500
+OutboxRelay__Outboxes__0__Retry__MaxRetryAttempts=3
+OutboxRelay__Outboxes__0__Retry__InitialDelay=00:00:10
+OutboxRelay__Outboxes__0__Retry__BackoffMultiplier=2.0
+OutboxRelay__Outboxes__0__Retry__MaxDelay=00:05:00
+OutboxRelay__Outboxes__0__DeadLetter__Destination=SnapshotsDlq
+OutboxRelay__Outboxes__0__Ordering__Mode=PerKey
+OutboxRelay__Outboxes__0__Ordering__OnPermanentFailure=Continue
 ```
 
 The librdkafka key `security.protocol` keeps its dot in the variable name. Durations use `hh:mm:ss`. A bare number (`"Interval": "5"`) is refused.
+
+### 2c. Upgrading from root-level settings
+
+This image reads relay settings only under `OutboxRelay`. Before rolling it out, move every relay key in each source the deployment uses ([Migrating from root-level settings](configuration.md#migrating-from-root-level-settings) has the full mapping):
+
+- **SSM Parameter Store.** Move parameters `.../Outboxes/...`, `.../Destinations/...`, `.../KafkaClusters/...` and `.../ConnectionStrings/<name>` to `.../OutboxRelay/Outboxes/...`, `.../OutboxRelay/Destinations/...`, `.../OutboxRelay/KafkaClusters/...` and `.../OutboxRelay/ConnectionStrings/<name>`.
+- **Helm values.** Rename env keys `Outboxes__*`, `Destinations__*`, `KafkaClusters__*` and `ConnectionStrings__*` to `OutboxRelay__Outboxes__*`, `OutboxRelay__Destinations__*`, `OutboxRelay__KafkaClusters__*` and `OutboxRelay__ConnectionStrings__*`. The secret reference for the connection string becomes `OutboxRelay__ConnectionStrings__Main`.
+- **Mounted appsettings and command line.** Nest the relay sections under `"OutboxRelay"` and prefix command-line keys with `OutboxRelay:`.
+- `HostOptions`, `Kestrel`, `Logging`, `SERVICE_*` and `OTEL_*` do not change.
+
+A pod started with only root-level relay settings finds no outbox, logs `StartupFailed` with `OutboxRelay.Outboxes: at least one outbox is required` and exits `1` (section 6e). The relay does not name root keys one by one, so use the mapping above. Root keys left behind are ignored. After the migration, remove them from appsettings, SSM parameter paths, Helm env values and the command line.
 
 ## 3. Database prerequisites
 
@@ -231,9 +244,11 @@ Delivery resumes on the next read. Prevent it with `idle_in_transaction_session_
 
 ### 6e. `CrashLoopBackOff` on `StartupFailed`
 
-Startup checks are fatal. The pod logs one `StartupFailed` entry (event 2, Critical) and exits 1. The entry lists every failure of the first stage that failed: configuration, then outbox tables and databases, then destinations, then destination bounds and routes ([Startup validation](configuration.md#startup-validation)). Fix every listed failure and restart. A later stage can then report its own failures. Messages name setting paths, outboxes, destinations and tables, never connection string values or secrets.
+Startup checks are fatal. The pod logs one `StartupFailed` entry (event 2, Critical) and exits 1. The entry lists every failure of the first stage that failed: configuration, then outbox tables and databases, then destinations, then destination bounds and routes ([Startup validation](configuration.md#startup-validation)). Fix every listed failure and restart. A later stage can then report its own failures. Messages name setting paths, outboxes, destinations and tables, never connection string values or secrets. Relay setting paths start with `OutboxRelay.`.
 
-The `Database` transport is removed. A destination with `Transport` `Database` fails startup with `Destinations[<name>].Transport: transport 'Database' is not implemented in this build`.
+`OutboxRelay.Outboxes: at least one outbox is required` means no outbox is configured under `OutboxRelay`. On an upgraded image this usually means the deployment still uses root-level relay settings. Move them (section 2c).
+
+The `Database` transport is removed. A destination with `Transport` `Database` fails startup with `OutboxRelay.Destinations[<name>].Transport: transport 'Database' is not implemented in this build`.
 
 ### 6f. Known untested risks
 

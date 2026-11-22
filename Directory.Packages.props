@@ -12,6 +12,10 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="$(OpenTelemetryVersion)" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Hosting -->
+    <PackageVersion Include="OpenTelemetry.Api" Version="$(OpenTelemetryVersion)" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Providers -->
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Dapper" Version="2.1.89" />

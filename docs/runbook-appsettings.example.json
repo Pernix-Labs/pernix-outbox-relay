@@ -1,56 +1,58 @@
 {
-  "KafkaClusters": {
-    "Main": {
-      "BootstrapServers": "b-1.msk:9092,b-2.msk:9092",
-      "Producer": {
-        "security.protocol": "PLAINTEXT"
-      }
-    }
-  },
-  "Destinations": [
-    {
-      "Name": "Snapshots",
-      "Transport": "Kafka",
-      "Kafka": {
-        "Cluster": "Main",
-        "Topic": "riskbackoffice.snapshots"
+  "OutboxRelay": {
+    "KafkaClusters": {
+      "Main": {
+        "BootstrapServers": "b-1.msk:9092,b-2.msk:9092",
+        "Producer": {
+          "security.protocol": "PLAINTEXT"
+        }
       }
     },
-    {
-      "Name": "SnapshotsDlq",
-      "Transport": "Kafka",
-      "Kafka": {
-        "Cluster": "Main",
-        "Topic": "riskbackoffice.snapshots.dlq"
+    "Destinations": [
+      {
+        "Name": "Snapshots",
+        "Transport": "Kafka",
+        "Kafka": {
+          "Cluster": "Main",
+          "Topic": "riskbackoffice.snapshots"
+        }
+      },
+      {
+        "Name": "SnapshotsDlq",
+        "Transport": "Kafka",
+        "Kafka": {
+          "Cluster": "Main",
+          "Topic": "riskbackoffice.snapshots.dlq"
+        }
       }
-    }
-  ],
-  "Outboxes": [
-    {
-      "Name": "ConfigSnapshots",
-      "Destination": "Snapshots",
-      "Database": {
-        "Provider": "PostgreSql",
-        "Connection": "Main",
-        "Table": "public.outbox"
-      },
-      "Polling": {
-        "Interval": "00:00:01",
-        "BatchSize": 500
-      },
-      "Retry": {
-        "MaxRetryAttempts": 3,
-        "InitialDelay": "00:00:10",
-        "BackoffMultiplier": 2.0,
-        "MaxDelay": "00:05:00"
-      },
-      "DeadLetter": {
-        "Destination": "SnapshotsDlq"
-      },
-      "Ordering": {
-        "Mode": "PerKey",
-        "OnPermanentFailure": "Continue"
+    ],
+    "Outboxes": [
+      {
+        "Name": "ConfigSnapshots",
+        "Destination": "Snapshots",
+        "Database": {
+          "Provider": "PostgreSql",
+          "Connection": "Main",
+          "Table": "public.outbox"
+        },
+        "Polling": {
+          "Interval": "00:00:01",
+          "BatchSize": 500
+        },
+        "Retry": {
+          "MaxRetryAttempts": 3,
+          "InitialDelay": "00:00:10",
+          "BackoffMultiplier": 2.0,
+          "MaxDelay": "00:05:00"
+        },
+        "DeadLetter": {
+          "Destination": "SnapshotsDlq"
+        },
+        "Ordering": {
+          "Mode": "PerKey",
+          "OnPermanentFailure": "Continue"
+        }
       }
-    }
-  ]
+    ]
+  }
 }

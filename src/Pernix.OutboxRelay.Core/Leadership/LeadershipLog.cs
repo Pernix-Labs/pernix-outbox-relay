@@ -4,9 +4,6 @@ namespace Pernix.OutboxRelay.Core.Leadership;
 
 public static partial class LeadershipLog
 {
-    [LoggerMessage(EventId = 100, Level = LogLevel.Warning, Message = "No outboxes configured, relay runs no workers")]
-    public static partial void NoOutboxesConfigured(this ILogger logger);
-
     [LoggerMessage(EventId = 101, Level = LogLevel.Information, Message = "Leadership acquired for outbox {Outbox}")]
     public static partial void LeadershipAcquired(this ILogger logger, string outbox);
 

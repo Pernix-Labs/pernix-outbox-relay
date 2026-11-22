@@ -33,7 +33,7 @@ internal sealed class PgEnvironment : IAsyncDisposable
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { [$"ConnectionStrings:{ConnectionName}"] = connectionString })
             .Build();
-        provider = new PostgreSqlOutboxStoreProvider(configuration);
+        provider = new PostgreSqlOutboxStoreProvider(new RelayConfiguration(configuration));
     }
 
     public static string Describe() =>

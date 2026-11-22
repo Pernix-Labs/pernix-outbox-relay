@@ -484,9 +484,9 @@ public sealed class PostgreSqlOutboxStoreTests(PostgreSqlFixture postgres)
     }
 
     internal static PostgreSqlOutboxStoreProvider Provider(params (string Name, string Value)[] connections) =>
-        new(new ConfigurationBuilder()
+        new(new RelayConfiguration(new ConfigurationBuilder()
             .AddInMemoryCollection(connections.Select(c => new KeyValuePair<string, string?>($"ConnectionStrings:{c.Name}", c.Value)))
-            .Build());
+            .Build()));
 
     internal static OutboxOptions Outbox(string name, string connection, string table, OrderingMode mode = OrderingMode.None) => new()
     {

@@ -1,9 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
-using Pernix.OutboxRelay.Core.Diagnostics;
 using Pernix.OutboxRelay.Core.Leadership;
 
-namespace Pernix.OutboxRelay.Host.Telemetry;
+namespace Pernix.OutboxRelay.Core.Diagnostics;
 
 // One static gauge over every registered state, so several hosts in one process each report their own outboxes.
 public static class LeaderGauge

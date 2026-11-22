@@ -1,6 +1,6 @@
 using Pernix.OutboxRelay.Core.Configuration;
 using Pernix.OutboxRelay.Core.Leadership;
-using Pernix.OutboxRelay.Host.Health;
+using Pernix.OutboxRelay.Hosting.Health;
 using Pernix.OutboxRelay.Unit.Tests.Configuration;
 using Pernix.OutboxRelay.Unit.Tests.Leadership;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -156,7 +156,7 @@ public sealed class WorkerLoopLivenessCheckTests
         var check = new WorkerLoopLivenessCheck(state, lifetime, time);
         var context = new HealthCheckContext
         {
-            Registration = new HealthCheckRegistration("worker-loop", check, HealthStatus.Unhealthy, [HealthTags.Live]),
+            Registration = new HealthCheckRegistration("worker-loop", check, HealthStatus.Unhealthy, [OutboxRelayHealthChecks.LiveTag]),
         };
 
         return await check.CheckHealthAsync(context, TestContext.Current.CancellationToken);

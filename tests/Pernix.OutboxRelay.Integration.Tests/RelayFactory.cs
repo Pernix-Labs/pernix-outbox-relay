@@ -1,4 +1,6 @@
+using Pernix.OutboxRelay.Core.Configuration;
 using Pernix.OutboxRelay.Integration.Tests.Kafka;
+using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -8,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Xunit;
 
 namespace Pernix.OutboxRelay.Integration.Tests;
 
@@ -22,7 +25,7 @@ public class RelayFactory : WebApplicationFactory<Program>
 
     private const string TestSettingsFile = "appsettings.Testing.json";
 
-    private readonly List<IDictionary<string, string?>> relaySettings = [];
+    private readonly List<IEnumerable<KeyValuePair<string, string?>>> settingsLayers = [];
     private readonly List<Action<IServiceCollection>> serviceOverrides = [];
 
     // Env layer is the real process environment, read by the host's default env source.
@@ -36,7 +39,7 @@ public class RelayFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, config) =>
         {
             InsertTestSettings(config);
-            foreach (var settings in relaySettings)
+            foreach (var settings in settingsLayers)
             {
                 config.AddInMemoryCollection(settings);
             }
@@ -68,10 +71,26 @@ public class RelayFactory : WebApplicationFactory<Program>
         }
     }
 
+    private static readonly string[] RelayRootKeys = ["Outboxes", "Destinations", "KafkaClusters", "ConnectionStrings"];
+
+    // Relay keys live under the OutboxRelay section; other keys (HostOptions, Logging, ...) stay at the root.
+    public static string RelayKey(string key)
+    {
+        var first = key.Split(':', 2)[0];
+        return RelayRootKeys.Contains(first, StringComparer.OrdinalIgnoreCase) ? RelayConfiguration.SectionName + ":" + key : key;
+    }
+
     // Appended after every other source, so these settings win over files, env and command line.
     public RelayFactory WithRelaySettings(IDictionary<string, string?> settings)
     {
-        relaySettings.Add(settings);
+        settingsLayers.Add(settings.Select(kv => new KeyValuePair<string, string?>(RelayKey(kv.Key), kv.Value)).ToList());
+        return this;
+    }
+
+    // Same source position as WithRelaySettings, with keys added as given.
+    public RelayFactory WithRootSettings(IDictionary<string, string?> settings)
+    {
+        settingsLayers.Add(settings.ToList());
         return this;
     }
 
@@ -111,6 +130,10 @@ public class RelayFactory : WebApplicationFactory<Program>
     }
 
     public static string NewOutboxName() => $"o_{Guid.NewGuid():N}";
+
+    // The relay refuses to start with zero outboxes. One None outbox on a fresh schema of the shared fixtures.
+    public async Task<RelayFactory> WithOutboxAsync(PostgreSqlFixture postgres, KafkaFixture kafka) =>
+        WithRelaySettings(OutboxSettings(postgres.ConnectionString, kafka.BootstrapServers, (NewOutboxName(), await postgres.CreateOutboxAsync())));
 
     // Test settings live in the test output, not the host content root.
     // Insert them at the appsettings.{env}.json position so env and command line still win.
@@ -160,4 +183,10 @@ public class RelayFactory : WebApplicationFactory<Program>
         {
         }
     }
+}
+
+// Class fixture form of RelayFactory.WithOutboxAsync, for tests that share one started relay.
+public sealed class OutboxRelayFactory(PostgreSqlFixture postgres, KafkaFixture kafka) : RelayFactory, IAsyncLifetime
+{
+    public async ValueTask InitializeAsync() => await WithOutboxAsync(postgres, kafka);
 }

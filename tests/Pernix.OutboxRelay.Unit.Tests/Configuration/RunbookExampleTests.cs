@@ -17,12 +17,12 @@ public sealed class RunbookExampleTests
     [Fact]
     public void Example_binds_and_validates_with_no_failures()
     {
-        var configuration = new ConfigurationBuilder().AddJsonFile(ExamplePath, optional: false, reloadOnChange: false).Build();
-        var provider = new PostgreSqlOutboxStoreProvider(configuration);
+        var relay = new RelayConfiguration(LoadExample().GetSection(RelayConfiguration.SectionName));
+        var provider = new PostgreSqlOutboxStoreProvider(relay);
 
         // The connection string comes from SSM or an env var in a deployment, never from the example file.
         var failures = RelayConfigurationValidator.Validate(
-            RelayOptionsBinder.Bind(configuration),
+            RelayOptionsBinder.Bind(relay.Section),
             name => name == "Main" ? "Host=outbox-db;Database=riskbackoffice;Username=outbox_relay" : null,
             new Dictionary<string, IOutboxStoreProvider>(StringComparer.OrdinalIgnoreCase) { [provider.Name] = provider },
             new DestinationFactoryResolver([new KafkaDestinationFactory(NullLoggerFactory.Instance)]));
@@ -33,8 +33,8 @@ public sealed class RunbookExampleTests
     [Fact]
     public void Example_has_one_PerKey_outbox_dead_lettering_to_a_second_Kafka_destination()
     {
-        var configuration = new ConfigurationBuilder().AddJsonFile(ExamplePath, optional: false, reloadOnChange: false).Build();
-        var options = RelayOptionsBinder.Bind(configuration);
+        var section = LoadExample().GetSection(RelayConfiguration.SectionName);
+        var options = RelayOptionsBinder.Bind(section);
 
         var outbox = Assert.Single(options.Outboxes);
         Assert.Equal(OrderingMode.PerKey, outbox.Ordering!.Mode);
@@ -42,7 +42,16 @@ public sealed class RunbookExampleTests
         Assert.Equal("SnapshotsDlq", outbox.DeadLetter!.Destination);
         Assert.Equal(["Snapshots", "SnapshotsDlq"], options.Destinations.Select(d => d.Name));
         Assert.All(options.Destinations, d => Assert.Equal("Kafka", d.Transport));
-        Assert.Null(configuration.GetConnectionString("Main"));
+        Assert.Null(section.GetConnectionString("Main"));
+    }
+
+    [Fact]
+    public void Example_keeps_relay_settings_only_under_the_OutboxRelay_section()
+    {
+        var configuration = LoadExample();
+
+        Assert.True(configuration.GetSection(RelayConfiguration.SectionName).Exists());
+        Assert.DoesNotContain(RootLevelRelayKeys, key => configuration.GetSection(key).Exists());
     }
 
     [Fact]
@@ -53,6 +62,11 @@ public sealed class RunbookExampleTests
 
         Assert.Contains("```json\n" + example + "\n```", runbook, StringComparison.Ordinal);
     }
+
+    private static readonly string[] RootLevelRelayKeys = ["Outboxes", "Destinations", "KafkaClusters", "ConnectionStrings"];
+
+    private static IConfigurationRoot LoadExample() =>
+        new ConfigurationBuilder().AddJsonFile(ExamplePath, optional: false, reloadOnChange: false).Build();
 
     private static string RepositoryRoot()
     {

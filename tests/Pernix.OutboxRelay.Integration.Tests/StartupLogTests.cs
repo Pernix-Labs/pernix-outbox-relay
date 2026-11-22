@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Pernix.OutboxRelay.Integration.Tests.Kafka;
+using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -6,7 +8,7 @@ using Xunit;
 
 namespace Pernix.OutboxRelay.Integration.Tests;
 
-public sealed class StartupLogTests
+public sealed class StartupLogTests(PostgreSqlFixture postgres, KafkaFixture kafka)
 {
     private const string RelayStartingEventName = "RelayStarting";
 
@@ -14,7 +16,8 @@ public sealed class StartupLogTests
     public async Task Relay_starting_is_logged_with_identity()
     {
         var provider = new CapturingLoggerProvider();
-        await using var factory = new RelayFactory().WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        await using var relay = await new RelayFactory().WithOutboxAsync(postgres, kafka);
+        await using var factory = relay.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
             s.AddSingleton<ILoggerProvider>(provider)));
 
         using var client = factory.CreateClient();

@@ -42,7 +42,6 @@ public sealed class RelayStartupValidatorTests
     private readonly FakeOutboxStoreProvider provider = new();
     private readonly FakeDestinationFactory factory = new();
     private readonly ValidatedOutboxes validatedOutboxes = new();
-    private readonly RecordingLogger<RelayStartupValidator> logger = new();
     private readonly HostOptions hostOptions = new() { ShutdownTimeout = TimeSpan.FromSeconds(28) };
 
     [Fact]
@@ -55,6 +54,44 @@ public sealed class RelayStartupValidatorTests
         Assert.Equal(["HostOptions.ShutdownTimeout: must be at least 00:00:28 to cover the 27 s stop budget"], ex.Failures);
         Assert.Empty(provider.Stores);
         Assert.Empty(factory.Created);
+    }
+
+    [Fact]
+    public async Task Config_failures_carry_the_section_prefix_and_the_host_options_line_does_not()
+    {
+        settings.Remove("Outboxes:0:Destination");
+        hostOptions.ShutdownTimeout = TimeSpan.FromSeconds(1);
+
+        var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
+
+        Assert.Equal(
+            [
+                "OutboxRelay.Outboxes[Orders].Destination: required",
+                "HostOptions.ShutdownTimeout: must be at least 00:00:28 to cover the 27 s stop budget",
+            ],
+            ex.Failures);
+    }
+
+    [Fact]
+    public async Task Root_connection_string_outside_the_section_does_not_satisfy_lookup()
+    {
+        var root = new ConfigurationBuilder()
+            .AddInMemoryCollection(settings.Select(kv => new KeyValuePair<string, string?>(
+                kv.Key.StartsWith("ConnectionStrings:", StringComparison.Ordinal) ? kv.Key : RelayConfiguration.SectionName + ":" + kv.Key,
+                kv.Value)))
+            .Build();
+        var validator = new RelayStartupValidator(
+            new RelayConfiguration(root.GetSection(RelayConfiguration.SectionName)), [provider], [factory], validatedOutboxes, Options.Create(hostOptions));
+
+        var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(() => validator.StartingAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            [
+                "OutboxRelay.Outboxes[Orders].Database.Connection: connection string 'OrdersDb' is not defined or empty in OutboxRelay.ConnectionStrings",
+                "OutboxRelay.Outboxes[Payments].Database.Connection: connection string 'OrdersDb' is not defined or empty in OutboxRelay.ConnectionStrings",
+            ],
+            ex.Failures);
+        Assert.Empty(provider.Stores);
     }
 
     [Fact]
@@ -73,8 +110,8 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Contains("Outboxes[Orders].Destination: required", ex.Failures);
-        Assert.Contains(ex.Failures, f => f.StartsWith("Outboxes[Payments].Ordering.Mode: required", StringComparison.Ordinal));
+        Assert.Contains("OutboxRelay.Outboxes[Orders].Destination: required", ex.Failures);
+        Assert.Contains(ex.Failures, f => f.StartsWith("OutboxRelay.Outboxes[Payments].Ordering.Mode: required", StringComparison.Ordinal));
         Assert.Empty(provider.Stores);
         Assert.Empty(factory.Created);
         Assert.Empty(validatedOutboxes.Entries);
@@ -91,8 +128,8 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Destinations[OrdersTopic].Kafka.Topic: required when Transport is Kafka",
-                "Destinations[PaymentsTopic].Transport: transport 'Database' is not implemented in this build",
+                "OutboxRelay.Destinations[OrdersTopic].Kafka.Topic: required when Transport is Kafka",
+                "OutboxRelay.Destinations[PaymentsTopic].Transport: transport 'Database' is not implemented in this build",
             ],
             ex.Failures);
         Assert.Empty(provider.Stores);
@@ -109,7 +146,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            ["Outboxes[Orders]: table 'public.outbox' not found", "Outboxes[Payments]: database unreachable (timeout)"],
+            ["OutboxRelay.Outboxes[Orders]: table 'public.outbox' not found", "OutboxRelay.Outboxes[Payments]: database unreachable (timeout)"],
             ex.Failures);
         Assert.Empty(factory.Created);
         Assert.Empty(validatedOutboxes.Entries);
@@ -124,7 +161,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            ["Outboxes[Orders].Database.Connection: connection string is not valid", "Outboxes[Payments]: database unreachable (timeout)"],
+            ["OutboxRelay.Outboxes[Orders].Database.Connection: connection string is not valid", "OutboxRelay.Outboxes[Payments]: database unreachable (timeout)"],
             ex.Failures);
         Assert.Empty(validatedOutboxes.Entries);
     }
@@ -138,44 +175,19 @@ public sealed class RelayStartupValidatorTests
     }
 
     [Fact]
-    public async Task No_outboxes_logs_warning_and_leaves_catalog_empty()
+    public async Task No_outboxes_fails_start_before_store_validation_and_probes()
     {
         foreach (var key in settings.Keys.Where(k => k.StartsWith("Outboxes:", StringComparison.Ordinal)).ToList())
         {
             settings.Remove(key);
         }
 
-        await StartingAsync();
-
-        Assert.Empty(validatedOutboxes.Entries);
-        var entry = Assert.Single(logger.WithEvent(100));
-        Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Warning, entry.Level);
-    }
-
-    [Fact]
-    public async Task No_outboxes_still_probes_and_disposes_every_destination()
-    {
-        RemoveOutboxesAndSecondDestination();
-
-        await StartingAsync();
-
-        var created = Assert.Single(factory.Created);
-        Assert.Equal("OrdersTopic", created.Destination);
-        Assert.Same(DestinationContext.Probe, created.Context);
-        Assert.Equal(["OrdersTopic"], factory.Disposed);
-        Assert.Empty(validatedOutboxes.Entries);
-    }
-
-    [Fact]
-    public async Task No_outboxes_with_failing_probe_throws()
-    {
-        RemoveOutboxesAndSecondDestination();
-        factory.Probes["OrdersTopic"] = _ => throw new DestinationValidationException("Destinations[OrdersTopic]: topic 'orders.events' does not exist");
-
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Equal(["Destinations[OrdersTopic]: topic 'orders.events' does not exist"], ex.Failures);
-        Assert.Equal(["OrdersTopic"], factory.Disposed);
+        Assert.Equal(["OutboxRelay.Outboxes: at least one outbox is required"], ex.Failures);
+        Assert.Empty(provider.Stores);
+        Assert.Empty(factory.Created);
+        Assert.Empty(validatedOutboxes.Entries);
     }
 
     [Fact]
@@ -189,7 +201,6 @@ public sealed class RelayStartupValidatorTests
         Assert.Same(provider.Stores["Orders"], validatedOutboxes.Entries[0].Store);
         Assert.Same(provider.Stores["Payments"], validatedOutboxes.Entries[1].Store);
         Assert.All(provider.Stores.Values, s => Assert.Equal(1, s.ValidateCalls));
-        Assert.Empty(logger.Entries);
     }
 
     [Fact]
@@ -243,7 +254,7 @@ public sealed class RelayStartupValidatorTests
     [Fact]
     public async Task Duplicate_provider_name_is_a_programming_error()
     {
-        var validator = new RelayStartupValidator(Configuration(), [provider, new FakeOutboxStoreProvider("postgresql")], [factory], validatedOutboxes, Options.Create(hostOptions), logger);
+        var validator = new RelayStartupValidator(Configuration(), [provider, new FakeOutboxStoreProvider("postgresql")], [factory], validatedOutboxes, Options.Create(hostOptions));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => validator.StartingAsync(TestContext.Current.CancellationToken));
     }
@@ -251,7 +262,7 @@ public sealed class RelayStartupValidatorTests
     [Fact]
     public async Task Duplicate_transport_is_a_programming_error()
     {
-        var validator = new RelayStartupValidator(Configuration(), [provider], [factory, new FakeDestinationFactory("kafka")], validatedOutboxes, Options.Create(hostOptions), logger);
+        var validator = new RelayStartupValidator(Configuration(), [provider], [factory, new FakeDestinationFactory("kafka")], validatedOutboxes, Options.Create(hostOptions));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.StartingAsync(TestContext.Current.CancellationToken));
 
@@ -308,7 +319,7 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Equal([$"Outboxes[Payments]: destination 'PaymentsTopic' declares SendBound {text}; must be greater than zero"], ex.Failures);
+        Assert.Equal([$"OutboxRelay.Outboxes[Payments]: destination 'PaymentsTopic' declares SendBound {text}; must be greater than zero"], ex.Failures);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
     }
 
@@ -321,7 +332,7 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Outboxes[Orders]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero",
+                "OutboxRelay.Outboxes[Orders]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero",
             ],
             ex.Failures);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
@@ -336,7 +347,7 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Equal(["Outboxes[Payments]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero"], ex.Failures);
+        Assert.Equal(["OutboxRelay.Outboxes[Payments]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero"], ex.Failures);
         Assert.Contains(("OrdersTopic", new DestinationContext(OrderingMode.Strict)), factory.Created);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
     }
@@ -350,7 +361,7 @@ public sealed class RelayStartupValidatorTests
 
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
-        Assert.Equal(["Outboxes[Payments]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero"], ex.Failures);
+        Assert.Equal(["OutboxRelay.Outboxes[Payments]: destination 'OrdersTopic' declares SendBound 00:00:00; must be greater than zero"], ex.Failures);
     }
 
     [Fact]
@@ -363,8 +374,8 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Outboxes[Orders]: destination 'OrdersTopic' declares route key 'Bad Key'; must match ^[a-z0-9][a-z0-9._-]{0,62}$",
-                "Outboxes[Payments].DeadLetter.Destination: destination 'OrdersTopic' declares Routes. A dead-letter destination has one address.",
+                "OutboxRelay.Outboxes[Orders]: destination 'OrdersTopic' declares route key 'Bad Key'; must match ^[a-z0-9][a-z0-9._-]{0,62}$",
+                "OutboxRelay.Outboxes[Payments].DeadLetter.Destination: destination 'OrdersTopic' declares Routes. A dead-letter destination has one address.",
             ],
             ex.Failures);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
@@ -378,7 +389,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            ["Outboxes[Orders]: destination 'OrdersTopic' declares an empty Routes set; Routes is null (one address) or names at least one route"],
+            ["OutboxRelay.Outboxes[Orders]: destination 'OrdersTopic' declares an empty Routes set; Routes is null (one address) or names at least one route"],
             ex.Failures);
     }
 
@@ -393,7 +404,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            [$"Outboxes[Payments]: destination 'PaymentsTopic' declares route key '{key}'; must match ^[a-z0-9][a-z0-9._-]{{0,62}}$"],
+            [$"OutboxRelay.Outboxes[Payments]: destination 'PaymentsTopic' declares route key '{key}'; must match ^[a-z0-9][a-z0-9._-]{{0,62}}$"],
             ex.Failures);
     }
 
@@ -405,7 +416,7 @@ public sealed class RelayStartupValidatorTests
         var ex = await Assert.ThrowsAsync<RelayStartupValidationException>(StartingAsync);
 
         Assert.Equal(
-            ["Outboxes[Payments]: destination 'PaymentsTopic' declares route key (null); must match ^[a-z0-9][a-z0-9._-]{0,62}$"],
+            ["OutboxRelay.Outboxes[Payments]: destination 'PaymentsTopic' declares route key (null); must match ^[a-z0-9][a-z0-9._-]{0,62}$"],
             ex.Failures);
     }
 
@@ -433,9 +444,9 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Outboxes[Orders]: destination 'OrdersTopic' declares an empty Routes set; Routes is null (one address) or names at least one route",
-                "Outboxes[Payments]: destination 'PaymentsTopic' declares route key '-bad'; must match ^[a-z0-9][a-z0-9._-]{0,62}$",
-                "Outboxes[Payments].DeadLetter.Destination: destination 'OrdersTopic' declares Routes. A dead-letter destination has one address.",
+                "OutboxRelay.Outboxes[Orders]: destination 'OrdersTopic' declares an empty Routes set; Routes is null (one address) or names at least one route",
+                "OutboxRelay.Outboxes[Payments]: destination 'PaymentsTopic' declares route key '-bad'; must match ^[a-z0-9][a-z0-9._-]{0,62}$",
+                "OutboxRelay.Outboxes[Payments].DeadLetter.Destination: destination 'OrdersTopic' declares Routes. A dead-letter destination has one address.",
             ],
             ex.Failures);
         Assert.Equal(factory.Created.Count, factory.Disposed.Count);
@@ -461,8 +472,8 @@ public sealed class RelayStartupValidatorTests
 
         Assert.Equal(
             [
-                "Destinations[OrdersTopic]: topic 'orders.events' does not exist",
-                "Destinations[PaymentsTopic]: topic 'payments.events' does not exist",
+                "OutboxRelay.Destinations[OrdersTopic]: topic 'orders.events' does not exist",
+                "OutboxRelay.Destinations[PaymentsTopic]: topic 'payments.events' does not exist",
             ],
             ex.Failures);
         Assert.Equal(2, factory.Disposed.Count);
@@ -504,7 +515,7 @@ public sealed class RelayStartupValidatorTests
     [Fact]
     public async Task Other_lifecycle_methods_do_nothing()
     {
-        var validator = new RelayStartupValidator(Configuration(), [provider], [factory], validatedOutboxes, Options.Create(hostOptions), logger);
+        var validator = new RelayStartupValidator(Configuration(), [provider], [factory], validatedOutboxes, Options.Create(hostOptions));
         var ct = TestContext.Current.CancellationToken;
 
         await validator.StartAsync(ct);
@@ -518,15 +529,7 @@ public sealed class RelayStartupValidatorTests
     }
 
     private Task StartingAsync() =>
-        new RelayStartupValidator(Configuration(), [provider], [factory], validatedOutboxes, Options.Create(hostOptions), logger).StartingAsync(TestContext.Current.CancellationToken);
+        new RelayStartupValidator(Configuration(), [provider], [factory], validatedOutboxes, Options.Create(hostOptions)).StartingAsync(TestContext.Current.CancellationToken);
 
-    private void RemoveOutboxesAndSecondDestination()
-    {
-        foreach (var key in settings.Keys.Where(k => k.StartsWith("Outboxes:", StringComparison.Ordinal) || k.StartsWith("Destinations:1:", StringComparison.Ordinal)).ToList())
-        {
-            settings.Remove(key);
-        }
-    }
-
-    private IConfiguration Configuration() => new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+    private RelayConfiguration Configuration() => new(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
 }

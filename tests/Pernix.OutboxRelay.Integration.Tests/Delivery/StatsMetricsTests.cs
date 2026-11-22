@@ -4,7 +4,6 @@ using System.Diagnostics.Metrics;
 using System.Net;
 using Pernix.OutboxRelay.Core.Diagnostics;
 using Pernix.OutboxRelay.Core.Leadership;
-using Pernix.OutboxRelay.Host.Telemetry;
 using Pernix.OutboxRelay.Integration.Tests.Kafka;
 using Pernix.OutboxRelay.Integration.Tests.Leadership;
 using Pernix.OutboxRelay.Integration.Tests.PostgreSql;

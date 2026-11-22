@@ -1,0 +1,23 @@
+<Project>
+  <!-- One version for all relay library packages (lockstep with the image). Imported by Core, PostgreSql, Kafka, Hosting only. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <VersionPrefix>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../.version').Trim())</VersionPrefix>
+
+    <Authors>Pernix</Authors>
+    <Company>Pernix</Company>
+    <RepositoryUrl>https://github.com/Pernix-Labs/pernix-outbox-relay</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>outbox;transactional-outbox;postgresql;kafka</PackageTags>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+</Project>

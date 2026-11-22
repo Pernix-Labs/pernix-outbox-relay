@@ -16,6 +16,8 @@ A service that changes its database and then publishes an event loses the event 
   - [5. Publish with Dapper or ADO.NET](#5-publish-with-dapper-or-adonet)
 - [How it works](#how-it-works)
 - [Configure and deploy](#configure-and-deploy)
+  - [Embed in your host](#embed-in-your-host)
+  - [Run the image](#run-the-image)
 - [Documentation](#documentation)
 - [Development](#development)
 
@@ -133,7 +135,24 @@ Delivery, failure policy, dead letters and operator actions: [`docs/delivery.md`
 
 ## Configure and deploy
 
-The relay ships only as a container image.
+The relay ships as a container image and as the NuGet package `Pernix.OutboxRelay.Hosting`, which runs the same relay inside your own .NET host. Both read their settings from the `OutboxRelay` configuration section.
+
+### Embed in your host
+
+```shell
+dotnet add package Pernix.OutboxRelay.Hosting
+```
+
+```
+builder.AddOutboxRelay();
+
+var app = builder.Build();
+app.MapOutboxRelayHealth();   // optional: /livez and /readyz
+```
+
+The package targets `net10.0` with the ASP.NET Core shared framework. It configures no logging, OpenTelemetry exporters or Kestrel. Telemetry helpers, configuration and host implications: [`docs/embedding.md`](docs/embedding.md).
+
+### Run the image
 
 - **Configuration.** appsettings (mounted as `/app/appsettings.Production.json`) or the same settings as environment variables. All sources load once at startup: a change needs a restart. Reference: [`docs/configuration.md`](docs/configuration.md). Worked example for one `PerKey` outbox: [runbook section 2](docs/runbook.md#2-deploy).
 - **Database.** The relay role needs `SELECT, UPDATE, DELETE` on the outbox table, plus `pg_monitor` for the `outbox.gate_lag` gauge. Connect directly to the primary endpoint: no RDS Proxy, no PgBouncer transaction pooling, because leadership uses session advisory locks. [Database prerequisites](docs/runbook.md#3-database-prerequisites).
@@ -147,6 +166,7 @@ Startup validates configuration, tables, grants and topics, and exits `1` on any
 ## Documentation
 
 - [`docs/client-packages.md`](docs/client-packages.md): producer guide for the client packages.
+- [`docs/embedding.md`](docs/embedding.md): run the relay inside your own .NET host with `Pernix.OutboxRelay.Hosting`.
 - [`docs/configuration.md`](docs/configuration.md): configuration, environment variables, startup validation, PostgreSQL prerequisites, Kafka, health, metrics.
 - [`docs/delivery.md`](docs/delivery.md): ordering modes, write-order rule, failure policy, dead letters, operator actions.
 - [`docs/runbook.md`](docs/runbook.md): deploy, alerts, incidents.
