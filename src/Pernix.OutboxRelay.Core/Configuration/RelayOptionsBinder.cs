@@ -15,12 +15,6 @@ public static partial class RelayOptionsBinder
         var options = new RelayOptions();
         var failures = new List<string>();
 
-        // Elements are bound one by one: binding a whole list or dictionary silently drops elements that fail to convert.
-        foreach (var cluster in configuration.GetSection(nameof(RelayOptions.KafkaClusters)).GetChildren())
-        {
-            options.KafkaClusters[cluster.Key] = BindSection<KafkaClusterOptions>(cluster, $"{nameof(RelayOptions.KafkaClusters)}[{cluster.Key}]", failures);
-        }
-
         options.Destinations.AddRange(configuration.GetSection(nameof(RelayOptions.Destinations)).GetChildren()
             .Select(section => new DestinationOptions
             {
@@ -28,6 +22,7 @@ public static partial class RelayOptionsBinder
                 Transport = section[nameof(DestinationOptions.Transport)],
                 Settings = section,
             }));
+        // Elements are bound one by one: binding a whole list silently drops elements that fail to convert.
         options.Outboxes.AddRange(configuration.GetSection(nameof(RelayOptions.Outboxes)).GetChildren()
             .Select((section, i) => BindSection<OutboxOptions>(section, ElementPath(nameof(RelayOptions.Outboxes), section, i), failures)));
 

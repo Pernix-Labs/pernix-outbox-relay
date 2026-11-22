@@ -41,7 +41,7 @@ public sealed class OutboxRelayRegistrationTests
         var services = new ServiceCollection().AddOutboxRelay();
 
         Assert.Contains(services, d => d.ServiceType == typeof(IOutboxStoreProvider) && d.ImplementationType == typeof(PostgreSqlOutboxStoreProvider));
-        Assert.Contains(services, d => d.ServiceType == typeof(IDestinationFactory) && d.ImplementationType == typeof(KafkaDestinationFactory));
+        Assert.Contains(services, d => d.ServiceType == typeof(IDestinationFactory) && d.ImplementationFactory?.Method.ReturnType == typeof(KafkaDestinationFactory));
     }
 
     [Fact]

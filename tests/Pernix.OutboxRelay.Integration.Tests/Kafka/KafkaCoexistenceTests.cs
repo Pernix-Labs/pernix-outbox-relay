@@ -35,8 +35,8 @@ public sealed class KafkaCoexistenceTests(KafkaFixture kafka)
             Message([], [], Headers(17, empty: 16)),
         };
 
-        var relay = Bind(topic);
-        var factory = new KafkaDestinationFactory(NullLoggerFactory.Instance);
+        var (relay, clusters) = Bind(topic);
+        var factory = new KafkaDestinationFactory(NullLoggerFactory.Instance, clusters);
         Assert.Empty(factory.Validate(relay.Destinations[0], $"Destinations[{Destination}]", relay));
         await using (var destination = factory.Create(relay.Destinations[0], new DestinationContext(OrderingMode.PerKey)))
         {
@@ -95,14 +95,18 @@ public sealed class KafkaCoexistenceTests(KafkaFixture kafka)
 
     private static string Hex(byte[]? bytes) => bytes is null ? "null" : $"[{Convert.ToHexString(bytes)}]";
 
-    private RelayOptions Bind(string topic) => RelayOptionsBinder.Bind(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+    private (RelayOptions Relay, KafkaClusterSection Clusters) Bind(string topic)
     {
-        ["KafkaClusters:Main:BootstrapServers"] = kafka.BootstrapServers,
-        ["Destinations:0:Name"] = Destination,
-        ["Destinations:0:Transport"] = "Kafka",
-        ["Destinations:0:Kafka:Cluster"] = "Main",
-        ["Destinations:0:Kafka:Topic"] = topic,
-    }).Build());
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["KafkaClusters:Main:BootstrapServers"] = kafka.BootstrapServers,
+            ["Destinations:0:Name"] = Destination,
+            ["Destinations:0:Transport"] = "Kafka",
+            ["Destinations:0:Kafka:Cluster"] = "Main",
+            ["Destinations:0:Kafka:Topic"] = topic,
+        }).Build();
+        return (RelayOptionsBinder.Bind(config), new KafkaClusterSection(new RelayConfiguration(config)));
+    }
 
     private static IReadOnlyList<string> LoadedLibrdkafkaPaths()
     {

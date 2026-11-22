@@ -1,5 +1,8 @@
 using Pernix.OutboxRelay.Core.Abstractions;
+using Pernix.OutboxRelay.Core.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Pernix.OutboxRelay.Destination.Kafka;
 
@@ -9,7 +12,11 @@ public static class KafkaServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<IDestinationFactory, KafkaDestinationFactory>();
+        services.TryAddSingleton(sp => new KafkaClusterSection(sp.GetRequiredService<RelayConfiguration>()));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRelaySectionValidator, KafkaClusterSection>(
+            sp => sp.GetRequiredService<KafkaClusterSection>()));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDestinationFactory, KafkaDestinationFactory>(
+            sp => new KafkaDestinationFactory(sp.GetRequiredService<ILoggerFactory>(), sp.GetRequiredService<KafkaClusterSection>())));
         return services;
     }
 }

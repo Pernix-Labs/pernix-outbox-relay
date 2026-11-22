@@ -19,14 +19,16 @@ public sealed class RunbookExampleTests
     {
         var relay = new RelayConfiguration(LoadExample().GetSection(RelayConfiguration.SectionName));
         var provider = new PostgreSqlOutboxStoreProvider(relay);
+        var kafka = new KafkaClusterSection(relay);
 
         // The connection string comes from SSM or an env var in a deployment, never from the example file.
         var failures = RelayConfigurationValidator.Validate(
             RelayOptionsBinder.Bind(relay.Section),
             name => name == "Main" ? "Host=outbox-db;Database=riskbackoffice;Username=outbox_relay" : null,
             new Dictionary<string, IOutboxStoreProvider>(StringComparer.OrdinalIgnoreCase) { [provider.Name] = provider },
-            new DestinationFactoryResolver([new KafkaDestinationFactory(NullLoggerFactory.Instance)]));
+            new DestinationFactoryResolver([new KafkaDestinationFactory(NullLoggerFactory.Instance, kafka)]));
 
+        Assert.Empty(kafka.Validate(relay.Section));
         Assert.Empty(failures);
     }
 

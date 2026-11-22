@@ -16,16 +16,20 @@ public sealed class KafkaDestinationFactory : IDestinationFactory
     private readonly Func<ProducerConfig, ILogger, Action<Error>, KafkaReportHandler, IKafkaRawProducer> producerFactory;
     private readonly ILogger logger;
 
-    public KafkaDestinationFactory(ILoggerFactory loggerFactory)
-        : this(loggerFactory, BuildProducer)
+    private readonly KafkaClusterSection clusters;
+
+    internal KafkaDestinationFactory(ILoggerFactory loggerFactory, KafkaClusterSection clusters)
+        : this(loggerFactory, clusters, BuildProducer)
     {
     }
 
-    internal KafkaDestinationFactory(ILoggerFactory loggerFactory, Func<ProducerConfig, ILogger, Action<Error>, KafkaReportHandler, IKafkaRawProducer> producerFactory)
+    internal KafkaDestinationFactory(ILoggerFactory loggerFactory, KafkaClusterSection clusters, Func<ProducerConfig, ILogger, Action<Error>, KafkaReportHandler, IKafkaRawProducer> producerFactory)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
+        ArgumentNullException.ThrowIfNull(clusters);
         ArgumentNullException.ThrowIfNull(producerFactory);
 
+        this.clusters = clusters;
         this.producerFactory = producerFactory;
         logger = loggerFactory.CreateLogger<KafkaDestinationFactory>();
 
@@ -58,7 +62,7 @@ public sealed class KafkaDestinationFactory : IDestinationFactory
         }
 
         KafkaClusterOptions? cluster = null;
-        if (HasValue(kafka.Cluster) && !relay.KafkaClusters.TryGetValue(kafka.Cluster!, out cluster))
+        if (HasValue(kafka.Cluster) && !clusters.TryGet(kafka.Cluster!, out cluster))
         {
             failures.Add($"{path}.Kafka.Cluster: Kafka cluster '{kafka.Cluster}' is not defined in KafkaClusters");
         }

@@ -1205,9 +1205,22 @@ internal sealed class KafkaHarness
     private readonly List<FakeProducer> producers = [];
     private readonly List<Action<Error>> fatalCallbacks = [];
 
+    private readonly Func<ProducerConfig, IKafkaRawProducer>? producerFactory;
+    private IConfiguration? configuration;
+    private KafkaDestinationFactory? factory;
+
     public KafkaHarness(Func<ProducerConfig, IKafkaRawProducer>? producerFactory = null)
     {
-        Factory = new KafkaDestinationFactory(NullLoggerFactory.Instance, (config, _, onFatal, onReport) =>
+        this.producerFactory = producerFactory;
+    }
+
+    // The cluster section binds once, so the factory is built from the settings at first access.
+    public KafkaDestinationFactory Factory => factory ??= BuildFactory();
+
+    private KafkaDestinationFactory BuildFactory()
+    {
+        configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        return new KafkaDestinationFactory(NullLoggerFactory.Instance, new KafkaClusterSection(new RelayConfiguration(configuration)), (config, _, onFatal, onReport) =>
         {
             var built = producerFactory?.Invoke(config) ?? new FakeProducer();
             if (built is FakeProducer fake)
@@ -1243,8 +1256,6 @@ internal sealed class KafkaHarness
         }
     }
 
-    public KafkaDestinationFactory Factory { get; }
-
     public IReadOnlyList<FakeProducer> Producers
     {
         get
@@ -1274,7 +1285,11 @@ internal sealed class KafkaHarness
         }
     }
 
-    public void Set(string key, string? value) => settings[key] = value;
+    public void Set(string key, string? value)
+    {
+        EnsureClustersUnbound(key);
+        settings[key] = value;
+    }
 
     public void UseRoutes(params (string Route, string Topic)[] routes)
     {
@@ -1287,6 +1302,7 @@ internal sealed class KafkaHarness
 
     public void Remove(string prefix)
     {
+        EnsureClustersUnbound(prefix);
         foreach (var key in settings.Keys.Where(k => k == prefix || k.StartsWith(prefix + ":", StringComparison.Ordinal)).ToList())
         {
             settings.Remove(key);
@@ -1295,8 +1311,17 @@ internal sealed class KafkaHarness
 
     public (DestinationOptions Destination, RelayOptions Relay) Bind()
     {
-        var relay = RelayOptionsBinder.Bind(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+        _ = Factory;
+        var relay = RelayOptionsBinder.Bind(configuration!);
         return (relay.Destinations[0], relay);
+    }
+
+    private void EnsureClustersUnbound(string key)
+    {
+        if (factory is not null && key.StartsWith(KafkaClusterSection.Key, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"'{key}' changed after the factory bound {KafkaClusterSection.Key}; set it before the first Factory access.");
+        }
     }
 
     public IReadOnlyList<string> Validate()

@@ -278,8 +278,8 @@ public sealed class KafkaDestinationIntegrationTests(KafkaFixture kafka)
             settings[key] = value;
         }
 
-        var relay = RelayOptionsBinder.Bind(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
-        return (relay, new KafkaDestinationFactory(NullLoggerFactory.Instance));
+        var config = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        return (RelayOptionsBinder.Bind(config), new KafkaDestinationFactory(NullLoggerFactory.Instance, new KafkaClusterSection(new RelayConfiguration(config))));
     }
 
     private static OutgoingMessage Message(byte[]? key, byte[] payload, IReadOnlyDictionary<string, string> headers) => new()
