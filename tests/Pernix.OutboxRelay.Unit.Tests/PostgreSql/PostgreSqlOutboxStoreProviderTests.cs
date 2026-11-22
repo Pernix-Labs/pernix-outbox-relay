@@ -67,8 +67,8 @@ public sealed class PostgreSqlOutboxStoreProviderTests
     {
         using var services = new ServiceCollection()
             .AddSingleton(new RelayConfiguration(new ConfigurationBuilder().Build()))
-            .AddPostgreSqlOutboxProvider()
-            .AddPostgreSqlOutboxProvider()
+            .AddPostgreSqlOutbox()
+            .AddPostgreSqlOutbox()
             .BuildServiceProvider();
 
         Assert.Single(services.GetServices<IOutboxStoreProvider>());

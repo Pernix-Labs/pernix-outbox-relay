@@ -1,4 +1,6 @@
+using Pernix.OutboxRelay.Destination.Kafka;
 using Pernix.OutboxRelay.Hosting;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Pernix.OutboxRelay.Integration.Tests.Delivery;
 using Pernix.OutboxRelay.Integration.Tests.Kafka;
 using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
@@ -25,7 +27,7 @@ public sealed class GenericHostDeliveryTests(PostgreSqlFixture postgres, KafkaFi
 
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
         builder.Configuration.AddInMemoryCollection(EmbeddedRelayHost.Prefixed(settings));
-        builder.AddOutboxRelay();
+        builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination();
         using var host = builder.Build();
         await host.StartAsync(Ct);
 
