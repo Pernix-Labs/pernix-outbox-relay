@@ -64,3 +64,6 @@ run: run_978274a29c69
 - 2026-11-21T21:54:08Z note — F1 rework 9c3644b (unit 1060 / integration 278 green); re-review
 - 2026-11-21T21:56:01Z note — re-review clean; opening PR
 - 2026-11-21T21:56:53Z gate — ask gate_057487b5fa46 on task_c1d2555f5e60 (status completed): PR verdict https://github.com/Pernix-Labs/pernix-outbox-relay/pull/2
+- 2026-11-22T08:08:50Z gate — PR verdict review-comments (human 2026-11-22): remove LegacyConfigurationGuard; Core validation 'at least one outbox is required' for image+package; supersedes F1/O1 and Q3; Host csproj ProjectReference untouched (question pending)
+- 2026-11-22T08:08:55Z note — PR rework: spec revision task_030ce351b126 -> A, code/docs rework task_0214fe5ca929
+- 2026-11-22T08:11:01Z note — requirements+design re-approved per human PR ruling (guard removed, required-outbox rule)

@@ -1,8 +1,8 @@
 ---
 status: approved
 createdAt: 2026-11-21T20:05:00Z
-updatedAt: 2026-11-21T21:46:59Z
-approvedAt: 2026-11-21T21:46:59Z
+updatedAt: 2026-11-22T08:11:01Z
+approvedAt: 2026-11-22T08:11:01Z
 ---
 
 # Requirements: Embeddable relay hosting package
@@ -38,7 +38,7 @@ Current state, relevant facts:
 ## Non-goals
 
 - **NG1.** New transports, providers, delivery semantics. Out of scope; parity only.
-- **NG2.** Backward-compat read of root-level `Outboxes`/`Destinations`/`KafkaClusters` in image. Human ruling: breaking change, migrate.
+- **NG2.** Backward-compat read or key-by-key detection of root-level `Outboxes`/`Destinations`/`KafkaClusters`/`ConnectionStrings`, in image or package. Human ruling: breaking change, migrate. Un-migrated config fails through Req3 AC6.
 - **NG3.** Package configuring logging providers, OTel exporters/resource/service name, Kestrel endpoints/ports. Human ruling: host-owned.
 - **NG4.** Target frameworks other than net10.0, or hosts without ASP.NET Core shared framework. Libraries already require `Microsoft.AspNetCore.App`.
 - **NG5.** Runtime config reload. Existing load-once semantics kept.
@@ -85,8 +85,8 @@ Current state, relevant facts:
 3. IF `OutboxRelay:ConnectionStrings:<name>` missing or empty THEN startup SHALL fail with current "must exist and be non-empty" failure. Relay SHALL NOT fall back to root `ConnectionStrings:<name>`.
 4. WHEN relay reports config failure THEN message SHALL name setting path including `OutboxRelay` prefix, and SHALL still never contain connection string values, `Producer` values or secrets.
 5. WHEN env var override used THEN `OutboxRelay__Outboxes__0__Polling__BatchSize` style keys SHALL override single settings as root-level keys do today.
-6. IF image (`Pernix.OutboxRelay.Host`) config has root-level `Outboxes`, `Destinations` or `KafkaClusters` THEN image SHALL fail startup regardless of whether an `OutboxRelay` section exists (`StartupFailed`, exit `1`) with migration hint naming `OutboxRelay` section and each legacy root key found, including root `ConnectionStrings` entries named by legacy `Outboxes[].Database.Connection`. Hint SHALL name keys only and SHALL NOT contain connection string values. Check is image-only (see AC7).
-7. WHEN package (embedded host) binds config THEN package SHALL perform NO root-level legacy key check, since host may own unrelated root `Outboxes`/`Destinations`/`KafkaClusters`/`ConnectionStrings` keys.
+6. IF `OutboxRelay:Outboxes` has no entries THEN startup validation SHALL fail in image and package with `OutboxRelay.Outboxes: at least one outbox is required` (`RelayStartupValidationException`; image: `StartupFailed`, exit `1`). Relay SHALL NOT start with zero outboxes, and the `NoOutboxesConfigured` warning path SHALL be removed. Existing rule kept: every outbox `Destination` SHALL name a destination defined in `OutboxRelay:Destinations`, and that destination SHALL be probed at startup.
+7. WHEN relay binds config THEN neither image nor package SHALL inspect root-level `Outboxes`/`Destinations`/`KafkaClusters`/`ConnectionStrings` keys. Root keys are ignored. An un-migrated image config has an empty `OutboxRelay:Outboxes` and fails through AC6.
 8. WHEN `HostOptions` read THEN relay SHALL keep reading host's `HostOptions` (root, host-owned), not `OutboxRelay:HostOptions`.
 
 ### Requirement 4: Startup validation semantics in embedded host
@@ -148,7 +148,7 @@ Current state, relevant facts:
 2. WHEN docs updated THEN docs/ SHALL contain embedding guide covering: registration call, opt-in health mapping, opt-in telemetry helpers, what package does not touch (logging, OTel exporters/resource/service name, Kestrel).
 3. WHEN embedding guide written THEN it SHALL document host-app implications: `HostOptions.ShutdownTimeout >= 00:00:28`, relay startup failure aborts whole host, shared process resources (thread pool, memory, native librdkafka, process-wide `LeaderGauge`, DB connections per outbox), net10.0 + ASP.NET Core shared framework requirement, multi-replica leadership unchanged (one leader per outbox across all host replicas).
 4. WHEN `docs/configuration.md` updated THEN all relay settings, examples, env var override examples SHALL use `OutboxRelay` prefix, including `OutboxRelay:ConnectionStrings`.
-5. WHEN migration documented THEN `docs/configuration.md` and `docs/runbook.md` SHALL describe image breaking change with before/after mapping (root `Outboxes`/`Destinations`/`KafkaClusters`/`ConnectionStrings` -> `OutboxRelay:*`, env vars `ConnectionStrings__Main` -> `OutboxRelay__ConnectionStrings__Main`).
+5. WHEN migration documented THEN `docs/configuration.md` and `docs/runbook.md` SHALL describe image breaking change with before/after mapping (root `Outboxes`/`Destinations`/`KafkaClusters`/`ConnectionStrings` -> `OutboxRelay:*`, env vars `ConnectionStrings__Main` -> `OutboxRelay__ConnectionStrings__Main`), and SHALL state that an un-migrated image fails startup with `OutboxRelay.Outboxes: at least one outbox is required`. Relay does no key-by-key legacy detection.
 6. WHEN `docs/runbook-appsettings.example.json` updated THEN it SHALL use `OutboxRelay` section and `RunbookExampleTests` SHALL pass against it.
 7. WHEN `docs/product.md` / `docs/architecture/outbox-relay-host.md` reference "image only" THEN they SHALL reflect package delivery (architecture doc update at closeout per spec workflow).
 
