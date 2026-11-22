@@ -1,7 +1,7 @@
 ---
-status: draft
+status: approved
 createdAt: 2026-11-21T21:15:00Z
-updatedAt: 2026-11-22T08:45:00Z
+updatedAt: 2026-11-22T08:39:36Z
 approvedAt: 2026-11-21T20:07:20Z
 completedAt: 2026-11-21T21:42:26Z
 ---

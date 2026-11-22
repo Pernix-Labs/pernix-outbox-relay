@@ -69,3 +69,6 @@ run: run_978274a29c69
 - 2026-11-22T08:11:01Z note — requirements+design re-approved per human PR ruling (guard removed, required-outbox rule)
 - 2026-11-22T08:34:14Z note — PR rework 7c3c54b (unit 1049 / integration 276 green); 884eea7 also carries the guard file deletions (staged by worker, swept by C's spec commit)
 - 2026-11-22T08:36:52Z gate — ask gate_483fc68ffc0e on task_c1d2555f5e60 (status completed): PR updated verdict (guard removed, required-outbox rule; review clean; arch doc range fix d3888d6)
+- 2026-11-22T08:38:06Z gate — PR verdict review-comments: rename LegacyRootKeys; drop remaining 'legacy' wording tied to this change (KafkaDeadLetterHeadersLegacy untouched); lean-Hosting idea -> follow-up spec
+- 2026-11-22T08:38:08Z note — spec docs -> draft for wording; nit task task_d52a4d99350f
+- 2026-11-22T08:39:36Z gate — ask gate_843c278174b4 on task_c1d2555f5e60 (status completed): PR updated verdict (567e697 wording; spec status restored to approved)
