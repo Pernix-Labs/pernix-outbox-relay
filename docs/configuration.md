@@ -95,12 +95,12 @@ Example, the design page § Configuration example reduced to one `Kafka` destina
 | `OutboxRelay.ConnectionStrings.<name>` | none | Must exist and be non-empty when a `Database.Connection` names it. A root `ConnectionStrings.<name>` does not satisfy it. |
 | `OutboxRelay.KafkaClusters.<name>` | none | Must exist when a `Kafka.Cluster` names it. `Producer` entries pass to librdkafka unchecked by the relay. A property librdkafka rejects fails startup, see [Startup validation](#startup-validation). |
 | `OutboxRelay.Destinations[].Name` | required | Unique. |
-| `OutboxRelay.Destinations[].Transport` | required | A registered transport: `Kafka`. Any other value is refused. |
+| `OutboxRelay.Destinations[].Transport` | required | A registered transport: `Kafka`, which requires `Pernix.OutboxRelay.Destination.Kafka` registered (`AddKafkaDestination`). The image registers it. Any other value is refused. |
 | `OutboxRelay.Destinations[].Kafka.Cluster` | required for `Kafka` | Names an `OutboxRelay.KafkaClusters` entry. A `Kafka` destination accepts only `Name`, `Transport` and `Kafka`. Any other block is an unknown setting. |
 | `OutboxRelay.Destinations[].Kafka.Topic`, `.Kafka.Routes` | exactly one for `Kafka` | `Topic` is one topic and takes rows with no route. `Routes` maps route → topic and takes rows whose route is a key, see [Routing](delivery.md#routing). Both set or neither set is refused. An empty `Routes` object counts as not set. Every `Routes` value must be non-blank. Two routes may map to the same topic. A main send writes no route header, so consumers of a shared topic cannot tell its routes apart, and on a compacted shared topic same-key rows of different routes replace each other. Route keys are checked as described in [Startup validation](#startup-validation). |
 | `OutboxRelay.Outboxes[].Name` | required | Unique. |
 | `OutboxRelay.Outboxes[].Destination` | required | Names an `OutboxRelay.Destinations[]` entry. |
-| `OutboxRelay.Outboxes[].Database.Provider` | required | `PostgreSql`. `SqlServer` is not registered and is refused. |
+| `OutboxRelay.Outboxes[].Database.Provider` | required | `PostgreSql`, which requires `Pernix.OutboxRelay.Outbox.PostgreSql` registered (`AddPostgreSqlOutbox`). The image registers it. `SqlServer` is not registered and is refused. |
 | `OutboxRelay.Outboxes[].Database.Connection` | required | Names an `OutboxRelay.ConnectionStrings` entry. |
 | `OutboxRelay.Outboxes[].Database.Table` | required | Plain (`outbox`) or schema-qualified (`public.outbox`). |
 | `OutboxRelay.Outboxes[].Polling.Interval` | `00:00:01` | Greater than `00:00:00`. Wait before the next read when the last read was short or the worker is at its 10 × `BatchSize` hold limit. |
@@ -140,7 +140,7 @@ The relay refuses to start on a configuration that names a feature this build la
 
 | Configuration | Message |
 |---|---|
-| `OutboxRelay.Destinations[].Transport` that names no registered transport | `OutboxRelay.Destinations[<name>].Transport: transport '<value>' is not implemented in this build` |
+| `OutboxRelay.Destinations[].Transport` that names no registered transport | `OutboxRelay.Destinations[<name>].Transport: transport '<value>' is not registered` |
 
 A `DeadLetter.Destination` that names no `OutboxRelay.Destinations[]` entry fails with `OutboxRelay.Outboxes[<name>].DeadLetter.Destination: destination '<value>' is not defined in Destinations`, and one that names the outbox's own destination with `OutboxRelay.Outboxes[<name>].DeadLetter.Destination: names the outbox's own destination '<destination>'`. A missing `Transport` is reported as `OutboxRelay.Destinations[<name>].Transport: required`. A destination without `Name` is named by its index (`OutboxRelay.Destinations[0]`).
 
@@ -226,7 +226,7 @@ Both checks use the configuration of the record's own topic: the `Topic`, or on 
 - **Size.** The relay computes an upper bound of the encoded record (key, value, header names and values, record and batch overhead) and refuses the record when it exceeds the smaller of the topic's `max.message.bytes` and the producer's `message.max.bytes` (default `1000000`). The check ignores compression, so with `compression.type` set a record that would fit compressed is still refused.
 - **Compacted topics.** A null key is refused when `cleanup.policy` contains `compact`.
 
-Kafka client errors and librdkafka log lines go to the relay log (`KafkaClientLog`, event 201, `KafkaClientError`, event 202). The relay never logs producer configuration, keys, payloads or header values. librdkafka debug lines are logged at `Debug`, and the default `Logging:LogLevel:Default` is `Information`, so a domain that sets the `debug` producer property sees that output only after it also sets `Logging:LogLevel:Pernix.OutboxRelay.Kafka` to `Debug`. The relay does not redact that output. That choice is the domain's.
+Kafka client errors and librdkafka log lines go to the relay log (`KafkaClientLog`, event 201, `KafkaClientError`, event 202). The relay never logs producer configuration, keys, payloads or header values. librdkafka debug lines are logged at `Debug`, and the default `Logging:LogLevel:Default` is `Information`, so a domain that sets the `debug` producer property sees that output only after it also sets `Logging:LogLevel:Pernix.OutboxRelay.Destination.Kafka` to `Debug`. The relay does not redact that output. That choice is the domain's.
 
 ## Migrating from root-level settings
 

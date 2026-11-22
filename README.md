@@ -135,16 +135,29 @@ Delivery, failure policy, dead letters and operator actions: [`docs/delivery.md`
 
 ## Configure and deploy
 
-The relay ships as a container image and as the NuGet package `Pernix.OutboxRelay.Hosting`, which runs the same relay inside your own .NET host. Both read their settings from the `OutboxRelay` configuration section.
+The relay ships as a container image and as NuGet packages that run the same relay inside your own .NET host. Both read their settings from the `OutboxRelay` configuration section.
+
+| Package | Role |
+|---|---|
+| `Pernix.OutboxRelay.Core` | Relay engine and provider abstractions. Referenced by the other three. |
+| `Pernix.OutboxRelay.Hosting` | `AddOutboxRelay`, health checks, telemetry helpers. Registers no outbox provider or destination. |
+| `Pernix.OutboxRelay.Outbox.PostgreSql` | PostgreSQL outbox provider (`AddPostgreSqlOutbox`). |
+| `Pernix.OutboxRelay.Destination.Kafka` | Kafka destination (`AddKafkaDestination`). |
 
 ### Embed in your host
 
 ```shell
 dotnet add package Pernix.OutboxRelay.Hosting
+dotnet add package Pernix.OutboxRelay.Outbox.PostgreSql
+dotnet add package Pernix.OutboxRelay.Destination.Kafka
 ```
 
-```
-builder.AddOutboxRelay();
+```csharp
+using Pernix.OutboxRelay.Hosting;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
+using Pernix.OutboxRelay.Destination.Kafka;
+
+builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination();
 
 var app = builder.Build();
 app.MapOutboxRelayHealth();   // optional: /livez and /readyz
@@ -166,7 +179,7 @@ Startup validates configuration, tables, grants and topics, and exits `1` on any
 ## Documentation
 
 - [`docs/client-packages.md`](docs/client-packages.md): producer guide for the client packages.
-- [`docs/embedding.md`](docs/embedding.md): run the relay inside your own .NET host with `Pernix.OutboxRelay.Hosting`.
+- [`docs/embedding.md`](docs/embedding.md): run the relay inside your own .NET host with `Pernix.OutboxRelay.Hosting` and the provider packages.
 - [`docs/configuration.md`](docs/configuration.md): configuration, environment variables, startup validation, PostgreSQL prerequisites, Kafka, health, metrics.
 - [`docs/delivery.md`](docs/delivery.md): ordering modes, write-order rule, failure policy, dead letters, operator actions.
 - [`docs/runbook.md`](docs/runbook.md): deploy, alerts, incidents.
