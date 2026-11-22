@@ -9,8 +9,8 @@ COPY ["src/RelayPackage.props", "src/"]
 COPY ["src/Pernix.OutboxRelay.Host/Pernix.OutboxRelay.Host.csproj", "src/Pernix.OutboxRelay.Host/"]
 COPY ["src/Pernix.OutboxRelay.Hosting/Pernix.OutboxRelay.Hosting.csproj", "src/Pernix.OutboxRelay.Hosting/"]
 COPY ["src/Pernix.OutboxRelay.Core/Pernix.OutboxRelay.Core.csproj", "src/Pernix.OutboxRelay.Core/"]
-COPY ["src/Pernix.OutboxRelay.PostgreSql/Pernix.OutboxRelay.PostgreSql.csproj", "src/Pernix.OutboxRelay.PostgreSql/"]
-COPY ["src/Pernix.OutboxRelay.Kafka/Pernix.OutboxRelay.Kafka.csproj", "src/Pernix.OutboxRelay.Kafka/"]
+COPY ["src/Pernix.OutboxRelay.Outbox.PostgreSql/Pernix.OutboxRelay.Outbox.PostgreSql.csproj", "src/Pernix.OutboxRelay.Outbox.PostgreSql/"]
+COPY ["src/Pernix.OutboxRelay.Destination.Kafka/Pernix.OutboxRelay.Destination.Kafka.csproj", "src/Pernix.OutboxRelay.Destination.Kafka/"]
 
 RUN dotnet restore src/Pernix.OutboxRelay.Host/Pernix.OutboxRelay.Host.csproj
 

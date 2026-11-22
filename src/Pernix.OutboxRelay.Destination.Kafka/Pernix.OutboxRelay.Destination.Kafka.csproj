@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\RelayPackage.props" />
+
+  <PropertyGroup>
+    <RootNamespace>Pernix.OutboxRelay.Destination.Kafka</RootNamespace>
+    <PackageTags>$(PackageTags);kafka</PackageTags>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="Nanov.Kafka" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pernix.OutboxRelay.Core\Pernix.OutboxRelay.Core.csproj" />
+  </ItemGroup>
+
+</Project>

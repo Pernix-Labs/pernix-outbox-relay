@@ -4,7 +4,7 @@ using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Core.Configuration;
 using Pernix.OutboxRelay.Integration.Tests.Delivery;
 using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
-using Pernix.OutboxRelay.Kafka;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -67,15 +67,16 @@ public sealed class KafkaHeaderParityTests(PostgreSqlFixture postgres, KafkaFixt
             }),
         ];
 
-        var relay = RelayOptionsBinder.Bind(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["KafkaClusters:Main:BootstrapServers"] = kafka.BootstrapServers,
             ["Destinations:0:Name"] = Destination,
             ["Destinations:0:Transport"] = "Kafka",
             ["Destinations:0:Kafka:Cluster"] = "Main",
             ["Destinations:0:Kafka:Topic"] = topic,
-        }).Build());
-        var factory = new KafkaDestinationFactory(NullLoggerFactory.Instance);
+        }).Build();
+        var relay = RelayOptionsBinder.Bind(config);
+        var factory = new KafkaDestinationFactory(NullLoggerFactory.Instance, new KafkaClusterSection(new RelayConfiguration(config)));
         Assert.Empty(factory.Validate(relay.Destinations[0], $"Destinations[{Destination}]", relay));
         await using (var destination = factory.Create(relay.Destinations[0], new DestinationContext(OrderingMode.PerKey)))
         {

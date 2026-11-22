@@ -3,7 +3,7 @@ using System.Text;
 using Pernix.OutboxRelay.Integration.Tests.Kafka;
 using Pernix.OutboxRelay.Integration.Tests.Leadership;
 using Pernix.OutboxRelay.Integration.Tests.PostgreSql;
-using Pernix.OutboxRelay.Kafka;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Confluent.Kafka;
 using Npgsql;
 using Xunit;

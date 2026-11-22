@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Core.Configuration;
-using Pernix.OutboxRelay.Kafka;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,7 +25,7 @@ public sealed class KafkaCoexistenceGateTests(KafkaFixture kafka)
         await kafka.CreateTopicAsync(topic, 1);
 
         // Stock admin describe through the relay's own path.
-        var (relay, factory) = Bind(topic);
+        var (relay, clusters, factory) = Bind(topic);
         Assert.Empty(factory.Validate(relay.Destinations[0], $"Destinations[{Destination}]", relay));
         await using (var destination = factory.Create(relay.Destinations[0], new DestinationContext(OrderingMode.PerKey)))
         {
@@ -43,7 +43,8 @@ public sealed class KafkaCoexistenceGateTests(KafkaFixture kafka)
 
         var succeeded = new int[records.Length];
         var failed = new int[records.Length];
-        var settings = KafkaClientSettings.Build(relay.KafkaClusters["Main"], OrderingMode.PerKey);
+        Assert.True(clusters.TryGet("Main", out var cluster));
+        var settings = KafkaClientSettings.Build(cluster, OrderingMode.PerKey);
         using (var producer = new Nk.RawProducerBuilder(settings.Producer)
             .SetDeliveryReportHandler((in Nk.RawDeliveryReport report) =>
             {
@@ -137,7 +138,7 @@ public sealed class KafkaCoexistenceGateTests(KafkaFixture kafka)
         return new SentRecord(key is null ? null : Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(value), list);
     }
 
-    private (RelayOptions Relay, KafkaDestinationFactory Factory) Bind(string topic)
+    private (RelayOptions Relay, KafkaClusterSection Clusters, KafkaDestinationFactory Factory) Bind(string topic)
     {
         var settings = new Dictionary<string, string?>
         {
@@ -148,8 +149,9 @@ public sealed class KafkaCoexistenceGateTests(KafkaFixture kafka)
             ["Destinations:0:Kafka:Topic"] = topic,
         };
 
-        var relay = RelayOptionsBinder.Bind(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
-        return (relay, new KafkaDestinationFactory(NullLoggerFactory.Instance));
+        var config = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        var clusters = new KafkaClusterSection(new RelayConfiguration(config));
+        return (RelayOptionsBinder.Bind(config), clusters, new KafkaDestinationFactory(NullLoggerFactory.Instance, clusters));
     }
 
     // Distinct loaded module paths containing "librdkafka": /proc/self/maps on Linux, lsof on macOS.

@@ -1,5 +1,5 @@
 using Pernix.OutboxRelay.Core.Configuration;
-using Pernix.OutboxRelay.Kafka;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Xunit;

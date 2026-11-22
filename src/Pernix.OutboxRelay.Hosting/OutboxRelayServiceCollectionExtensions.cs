@@ -1,8 +1,6 @@
 using Pernix.OutboxRelay.Core;
 using Pernix.OutboxRelay.Core.Leadership;
 using Pernix.OutboxRelay.Hosting.Health;
-using Pernix.OutboxRelay.Kafka;
-using Pernix.OutboxRelay.PostgreSql;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -10,7 +8,7 @@ namespace Pernix.OutboxRelay.Hosting;
 
 public static class OutboxRelayServiceCollectionExtensions
 {
-    // Relay services and health checks only. Logging, OpenTelemetry, Kestrel, endpoints and HostOptions stay with the host.
+    // Relay core services and health checks only. No outbox provider or destination: the host registers those. Logging, OpenTelemetry, Kestrel, endpoints and HostOptions stay with the host.
     public static IServiceCollection AddOutboxRelay(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -21,7 +19,7 @@ public static class OutboxRelayServiceCollectionExtensions
             throw new InvalidOperationException("AddOutboxRelay was already called on this service collection.");
         }
 
-        services.AddOutboxRelayCore().AddPostgreSqlOutboxProvider().AddKafkaTransport();
+        services.AddOutboxRelayCore();
 
         services.AddHealthChecks()
             .AddCheck<HostLifetimeReadinessCheck>(OutboxRelayHealthChecks.HostLifetime, tags: [OutboxRelayHealthChecks.ReadyTag])

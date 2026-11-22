@@ -521,7 +521,7 @@ Heap over time, after full GC, first / last / max (KB). Every `flat` run is flat
 | Harness | Same both sides: branch `benchmarks/` rsynced into the base worktree before set 1 and again after `418cdde` (forced full GC before flat term checkpoints) |
 | Runs | Verdict: 3 interleaved per side, one process each, `reported` round, median. Ceilings: 5 guard runs plus 1 passing run |
 
-Changed cells, before = base median, after = branch median. Every cell listed is a measured reduction (dead-letter header merge, `src/Pernix.OutboxRelay.Kafka/KafkaDeadLetterHeaders.cs`).
+Changed cells, before = base median, after = branch median. Every cell listed is a measured reduction (dead-letter header merge, `src/Pernix.OutboxRelay.Destination.Kafka/KafkaDeadLetterHeaders.cs`).
 
 | Cell | before | after | Δ |
 |---|---:|---:|---:|

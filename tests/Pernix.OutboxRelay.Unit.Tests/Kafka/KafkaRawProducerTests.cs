@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Core.Configuration;
-using Pernix.OutboxRelay.Kafka;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Confluent.Kafka;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -19,6 +19,14 @@ public sealed class KafkaRawProducerTests
     private const long FillOverflowBytes17 = 120;
 
     private static readonly byte[] Value = [1, 2, 3];
+    private static readonly IConfiguration RelayConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["KafkaClusters:Main:BootstrapServers"] = "kafka-1:9092",
+        ["Destinations:0:Name"] = KafkaHarness.Destination,
+        ["Destinations:0:Transport"] = "Kafka",
+        ["Destinations:0:Kafka:Cluster"] = "Main",
+        ["Destinations:0:Kafka:Topic"] = KafkaHarness.Topic,
+    }).Build();
     private static readonly MessageHeaders CommonHeaders = new([new MessageHeader("h", [1])]);
     private static readonly MessageHeaders RareHeaders = new([new MessageHeader("h", [1]), new MessageHeader("empty", [])]);
 
@@ -77,7 +85,7 @@ public sealed class KafkaRawProducerTests
         var logs = new CapturingLoggerFactory();
         var fake = new FakeProducer();
         Action<Error>? onFatal = null;
-        var factory = new KafkaDestinationFactory(logs, (_, _, fatal, report) =>
+        var factory = new KafkaDestinationFactory(logs, new KafkaClusterSection(new RelayConfiguration(RelayConfig)), (_, _, fatal, report) =>
         {
             fake.OnReport = report;
             onFatal = fatal;
@@ -224,14 +232,7 @@ public sealed class KafkaRawProducerTests
 
     private static KafkaDestination Create(KafkaDestinationFactory factory)
     {
-        var relay = RelayOptionsBinder.Bind(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["KafkaClusters:Main:BootstrapServers"] = "kafka-1:9092",
-            ["Destinations:0:Name"] = KafkaHarness.Destination,
-            ["Destinations:0:Transport"] = "Kafka",
-            ["Destinations:0:Kafka:Cluster"] = "Main",
-            ["Destinations:0:Kafka:Topic"] = KafkaHarness.Topic,
-        }).Build());
+        var relay = RelayOptionsBinder.Bind(RelayConfig);
         var options = relay.Destinations[0];
         Assert.Empty(factory.Validate(options, $"Destinations[{options.Name}]", relay));
         foreach (var address in factory.AddressesOf(KafkaHarness.Destination).Distinct)

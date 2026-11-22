@@ -54,7 +54,7 @@ public sealed class DestinationFactoryResolverTests
 
         Assert.Null(Resolve(new FakeDestinationFactory("Kafka")));
 
-        Assert.Equal([$"{Path}.Transport: transport '{transport}' is not implemented in this build"], failures);
+        Assert.Equal([$"{Path}.Transport: transport '{transport}' is not registered"], failures);
     }
 
     [Theory]

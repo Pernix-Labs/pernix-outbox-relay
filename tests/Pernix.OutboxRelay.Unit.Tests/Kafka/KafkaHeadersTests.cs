@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using Pernix.OutboxRelay.Core.Abstractions;
-using Pernix.OutboxRelay.Kafka;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Xunit;
 using NanovHeaders = Nanov.Kafka.KafkaHeaders;
 

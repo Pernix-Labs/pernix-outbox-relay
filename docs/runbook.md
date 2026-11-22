@@ -248,7 +248,7 @@ Startup checks are fatal. The pod logs one `StartupFailed` entry (event 2, Criti
 
 `OutboxRelay.Outboxes: at least one outbox is required` means no outbox is configured under `OutboxRelay`. On an upgraded image this usually means the deployment still uses root-level relay settings. Move them (section 2c).
 
-The `Database` transport is removed. A destination with `Transport` `Database` fails startup with `OutboxRelay.Destinations[<name>].Transport: transport 'Database' is not implemented in this build`.
+The `Database` transport is removed. A destination with `Transport` `Database` fails startup with `OutboxRelay.Destinations[<name>].Transport: transport 'Database' is not registered`.
 
 ### 6f. Known untested risks
 

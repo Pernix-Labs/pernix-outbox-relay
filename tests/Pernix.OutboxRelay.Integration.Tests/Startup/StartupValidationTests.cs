@@ -20,7 +20,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
     [Theory]
     [InlineData("OutboxRelay.Outboxes[{outbox}].Ordering.Mode: required, one of None, PerKey, Strict", "Outboxes:0:Ordering:Mode")]
     [InlineData("OutboxRelay.Destinations[Events].Transport: required", "Destinations:0:Transport")]
-    [InlineData("OutboxRelay.Destinations[Events].Transport: transport 'Sqs' is not implemented in this build", "Destinations:0:Transport=Sqs")]
+    [InlineData("OutboxRelay.Destinations[Events].Transport: transport 'Sqs' is not registered", "Destinations:0:Transport=Sqs")]
     [InlineData("OutboxRelay.Outboxes[{outbox}].Ordering.Mode: must be one of None, PerKey, Strict", "Outboxes:0:Ordering:Mode=Sideways")]
     [InlineData("OutboxRelay.Outboxes[{outbox}].Polling.BatchSize: must be at least 1", "Outboxes:0:Polling:BatchSize=0")]
     [InlineData("OutboxRelay.Outboxes[{outbox}].Retry.MaxDelay: must be at least Retry.InitialDelay", "Outboxes:0:Retry:MaxDelay=00:00:01")]
@@ -188,7 +188,7 @@ public sealed class StartupValidationTests(PostgreSqlFixture postgres, KafkaFixt
         Assert.Equal(
             [
                 $"OutboxRelay.Outboxes[{outbox}].Polling.BatchSize: must be at least 1",
-                "OutboxRelay.Destinations[Archive].Transport: transport 'Database' is not implemented in this build",
+                "OutboxRelay.Destinations[Archive].Transport: transport 'Database' is not registered",
                 $"OutboxRelay.Outboxes[{outbox}].DeadLetter.Destination: names the outbox's own destination 'Events'",
             ],
             failures);

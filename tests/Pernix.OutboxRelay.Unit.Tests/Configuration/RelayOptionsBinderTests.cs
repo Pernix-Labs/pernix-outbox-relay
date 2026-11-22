@@ -63,7 +63,6 @@ public sealed class RelayOptionsBinderTests
     {
         var options = Bind([]);
 
-        Assert.Empty(options.KafkaClusters);
         Assert.Empty(options.Destinations);
         Assert.Empty(options.Outboxes);
     }
@@ -97,30 +96,15 @@ public sealed class RelayOptionsBinderTests
     }
 
     [Fact]
-    public void Kafka_clusters_bind_case_insensitively_with_producer_settings()
-    {
-        var options = Bind(new()
-        {
-            ["KafkaClusters:Main:BootstrapServers"] = "b:9092",
-            ["KafkaClusters:Main:Producer:acks"] = "all",
-        });
-
-        var cluster = options.KafkaClusters["MAIN"];
-        Assert.Equal("b:9092", cluster.BootstrapServers);
-        Assert.Equal("all", cluster.Producer["acks"]);
-    }
-
-    [Fact]
-    public void Free_form_producer_keys_are_not_unknown_settings()
+    public void Kafka_clusters_key_is_ignored()
     {
         var failures = Failures(new()
         {
             ["KafkaClusters:Main:BootstrapServers"] = "b:9092",
-            ["KafkaClusters:Main:Producer:sasl.mechanism"] = "PLAIN",
-            ["KafkaClusters:Main:Producer:any:nested"] = "x",
+            ["KafkaClusters:Main:BootstrapServer"] = "sentinel-unknown",
         });
 
-        // The only failure is the required-outbox rule, not an unknown setting.
+        // The only failure is the required-outbox rule: the Kafka destination package owns this key.
         Assert.Equal(["Outboxes: at least one outbox is required"], failures);
     }
 
@@ -147,7 +131,6 @@ public sealed class RelayOptionsBinderTests
     [InlineData("Outboxes:0:Polling:Intreval", "Outboxes[Orders].Polling: unknown setting 'Intreval'")]
     [InlineData("Outboxes:0:Retry:MaxDelays", "Outboxes[Orders].Retry: unknown setting 'MaxDelays'")]
     [InlineData("Outboxes:0:Name:Extra", "Outboxes[Orders].Name: unknown setting 'Extra'")]
-    [InlineData("KafkaClusters:Main:BootstrapServer", "KafkaClusters[Main]: unknown setting 'BootstrapServer'")]
     public void Unknown_key_fails_naming_the_key_and_not_the_value(string key, string expected)
     {
         var failures = Failures(new()

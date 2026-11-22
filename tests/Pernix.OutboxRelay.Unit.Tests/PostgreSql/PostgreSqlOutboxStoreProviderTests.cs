@@ -1,7 +1,7 @@
 using System.Reflection;
 using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Core.Configuration;
-using Pernix.OutboxRelay.PostgreSql;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -67,8 +67,8 @@ public sealed class PostgreSqlOutboxStoreProviderTests
     {
         using var services = new ServiceCollection()
             .AddSingleton(new RelayConfiguration(new ConfigurationBuilder().Build()))
-            .AddPostgreSqlOutboxProvider()
-            .AddPostgreSqlOutboxProvider()
+            .AddPostgreSqlOutbox()
+            .AddPostgreSqlOutbox()
             .BuildServiceProvider();
 
         Assert.Single(services.GetServices<IOutboxStoreProvider>());

@@ -35,7 +35,7 @@ public sealed class DestinationFactoryResolver
             return factory;
         }
 
-        failures.Add($"{path}.Transport: transport '{destination.Transport}' is not implemented in this build");
+        failures.Add($"{path}.Transport: transport '{destination.Transport}' is not registered");
         return null;
     }
 

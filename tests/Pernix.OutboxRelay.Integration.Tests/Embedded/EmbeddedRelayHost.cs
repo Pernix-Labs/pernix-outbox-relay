@@ -1,5 +1,7 @@
 using Pernix.OutboxRelay.Core.Configuration;
+using Pernix.OutboxRelay.Destination.Kafka;
 using Pernix.OutboxRelay.Hosting;
+using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -27,7 +29,7 @@ internal sealed class EmbeddedRelayHost : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(Prefixed(settings));
-        builder.AddOutboxRelay();
+        builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination();
 
         var app = builder.Build();
         app.MapOutboxRelayHealth();
