@@ -38,3 +38,5 @@ run: run_bd98c5d317e4
 - 2026-11-22T10:45:15Z verify-minted — coord 5 round 1, task task_35ecfc8be205
 - 2026-11-22T11:09:35Z verdict — coord 5 APPROVE
 - 2026-11-22T11:11:07Z closeout — all 7 coords approved; closeout worker: no doc changes needed
+- 2026-11-22T11:13:41Z note — closeout review: 3 low findings; rework F1 (IRelaySectionValidator contract wording + test) and F3 (malformed KafkaClusters in lean-startup test); F2 PostgreSQL rationale comments kept per design
+- 2026-11-22T11:14:45Z note — review rework 1e1f25d (F1, F3) checked; build green, unit 1064 passed
