@@ -40,3 +40,6 @@ run: run_89372152684e
 - 2026-11-23T08:32:53Z gate — ask gate_bf3f5fd0ea3a on task_045f72a2706a (status completed): PR #4 verdict
 - 2026-11-23T08:36:51Z note — PR #4 CI red (run 45139512508, 2 attempts): pernix-ci v1.0.0 reusable ci.yml default working-directory '.' -> dotnet-restore hashFiles('repo/./**/...') -> 'Invalid pattern ... Relative pathing . is not allowed'. pernix-ci bug, hits every template caller; external-caller test uses blocks with 'caller' so missed it. Asked foreman.
 - 2026-11-23T08:37:28Z note — foreman O1: pernix-ci fix + v1.0.1 dispatched by foreman; PR #4 held until v1.0.1 sha arrives, then pin rework + CI re-run
+- 2026-11-23T10:40:21Z note — pernix-ci v1.0.1 released (1bf0fae, fixes default working-directory); rework pins v1.0.0 -> v1.0.1
+- 2026-11-23T10:41:35Z note — pin rework 6e2ea89 (v1.0.1; v1.0.1 templates still say @v1.0.0, caller ref differs by design)
+- 2026-11-23T10:51:40Z gate — ask gate_bf3f5fd0ea3a on task_045f72a2706a (status completed): PR #4 updated, CI green run 45158391541, verdict
