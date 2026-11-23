@@ -1,7 +1,4 @@
-<!-- TreatAsLocalProperty: a global TargetFramework (CI restores/builds the slnx with -p:TargetFramework=net10.0) must not retarget this net8.0 package. -->
-<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="TargetFramework">
-
-  <Import Project="..\..\PackageVersion.props" />
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <IsPackable>true</IsPackable>

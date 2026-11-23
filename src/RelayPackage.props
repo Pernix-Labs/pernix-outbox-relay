@@ -1,8 +1,7 @@
 <Project>
-  <!-- One version for all relay library packages (lockstep with the image). Imported by Core, Outbox.PostgreSql, Destination.Kafka, Hosting only. -->
+  <!-- One package metadata set for all relay library packages. Version comes from the release tag (ADR 0013). -->
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <VersionPrefix>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../.version').Trim())</VersionPrefix>
 
     <Authors>Pernix</Authors>
     <Company>Pernix</Company>

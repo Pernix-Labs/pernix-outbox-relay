@@ -1,6 +1,0 @@
-<Project>
-  <!-- One version for all client packages (lockstep). Imported by the packable client projects only. -->
-  <PropertyGroup>
-    <VersionPrefix>2.0.0</VersionPrefix>
-  </PropertyGroup>
-</Project>
