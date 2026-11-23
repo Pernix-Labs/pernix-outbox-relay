@@ -39,3 +39,4 @@ run: run_89372152684e
 - 2026-11-23T08:32:27Z note — closeout review fix 152bf53 (policy repository owner Pernix-Labs); review otherwise clean
 - 2026-11-23T08:32:53Z gate — ask gate_bf3f5fd0ea3a on task_045f72a2706a (status completed): PR #4 verdict
 - 2026-11-23T08:36:51Z note — PR #4 CI red (run 45139512508, 2 attempts): pernix-ci v1.0.0 reusable ci.yml default working-directory '.' -> dotnet-restore hashFiles('repo/./**/...') -> 'Invalid pattern ... Relative pathing . is not allowed'. pernix-ci bug, hits every template caller; external-caller test uses blocks with 'caller' so missed it. Asked foreman.
+- 2026-11-23T08:37:28Z note — foreman O1: pernix-ci fix + v1.0.1 dispatched by foreman; PR #4 held until v1.0.1 sha arrives, then pin rework + CI re-run
