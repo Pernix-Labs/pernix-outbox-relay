@@ -11,3 +11,26 @@ run: run_89372152684e
 - 2026-11-23T08:09:59Z gate — ask gate_8312843718b1 on task_163fef74a200 (status completed): approve tasks.md
 - 2026-11-23T08:10:16Z gate — tasks.md approve (foreman): task 2 stays out of docs/, task 5 owns every doc edit
 - 2026-11-23T08:10:18Z dag-materialized — 6 created, 0 replaced, 0 orphaned, 0 unchanged (map: .claude/orca-spec/runs/run_89372152684e/dag-map.json)
+- 2026-11-23T08:10:39Z note — dispatched coord 2 ctx_47396be90c7c, coord 3 ctx_e0e7352a2bd6
+- 2026-11-23T08:11:10Z worker_done — coord 3, sha none, env release (relay/v*, client/v*) + NUGET_USER=avataraps created
+- 2026-11-23T08:11:10Z verify-minted — coord 3 round 1, task task_7e4b3346ec53
+- 2026-11-23T08:11:33Z verdict — coord 3 APPROVE
+- 2026-11-23T08:11:44Z worker_done — coord 2, sha c4d8d3a, version files + platform-cicd workarounds removed, NuGetAudit all/high
+- 2026-11-23T08:11:44Z verify-minted — coord 2 round 1, task task_1fa59578f754
+- 2026-11-23T08:12:11Z worker_done — coord 1, sha 7dc1e3b, .github units + pernix-ci workflows @v1.0.0
+- 2026-11-23T08:12:11Z verify-minted — coord 1 round 1, task task_0fde246c4b58
+- 2026-11-23T08:12:51Z verdict — coord 2 APPROVE
+- 2026-11-23T08:13:11Z worker_done — coord 4, sha efcf951, ADR 0013 + supersede annotations
+- 2026-11-23T08:13:11Z verify-minted — coord 4 round 1, task task_aa9941fd1005
+- 2026-11-23T08:13:25Z verdict — coord 1 APPROVE
+- 2026-11-23T08:13:54Z verdict — coord 4 APPROVE
+- 2026-11-23T08:14:48Z note — coord 5 question msg_cf5a9ad621ce: pre-existing README snippet test failure; asked foreman msg_4237768634b1
+- 2026-11-23T08:15:11Z note — foreman O1: coord 5 also fixes README 'Embed in your host' snippet marker (compiled Snippets/*.cs + 3 relay ProjectReferences in client docs test project). Cause: pre-existing since #3, uncaught because the repo had no CI. Docs test project joins relay unit too (extra CI runs only).
+- 2026-11-23T08:16:23Z worker_done — coord 5, sha 093f3c9, docs CI/CD + release; README embed snippet compiled (O1)
+- 2026-11-23T08:16:23Z verify-minted — coord 5 round 1, task task_77be31dcbbb0
+- 2026-11-23T08:16:31Z note — coord 6 held until coord 5 verify ends: both run dotnet builds in the shared worktree
+- 2026-11-23T08:17:16Z verdict — coord 5 APPROVE
+- 2026-11-23T08:22:46Z worker_done — coord 6, sha 2f730fd, local gate: build 0 warn, 1888 pass/17 skip/0 fail, docker ok, actionlint ok, no tags
+- 2026-11-23T08:22:46Z verify-minted — coord 6 round 1, task task_31dcf5914c82
+- 2026-11-23T08:28:33Z verdict — coord 6 APPROVE
+- 2026-11-23T08:29:45Z closeout — docs sweep 04c18e5; all 6 coords approved
