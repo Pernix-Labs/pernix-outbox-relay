@@ -21,6 +21,9 @@
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client\Pernix.OutboxRelay.Client.csproj" />
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client.EntityFrameworkCore\Pernix.OutboxRelay.Client.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Client.PostgreSql\Pernix.OutboxRelay.Client.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\..\src\Pernix.OutboxRelay.Hosting\Pernix.OutboxRelay.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\src\Pernix.OutboxRelay.Outbox.PostgreSql\Pernix.OutboxRelay.Outbox.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\..\src\Pernix.OutboxRelay.Destination.Kafka\Pernix.OutboxRelay.Destination.Kafka.csproj" />
   </ItemGroup>
 
 </Project>

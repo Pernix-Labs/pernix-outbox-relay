@@ -32,7 +32,7 @@ dotnet add package Pernix.OutboxRelay.Client.PostgreSql
 dotnet add package Pernix.OutboxRelay.Client.EntityFrameworkCore   # EF Core producers only
 ```
 
-The packages target `net8.0`. Install every client package at one version.
+The packages are on nuget.org and target `net8.0`. Install every client package at one version.
 
 ### 2. Create the outbox table
 
@@ -135,7 +135,7 @@ Delivery, failure policy, dead letters and operator actions: [`docs/delivery.md`
 
 ## Configure and deploy
 
-The relay ships as a container image and as NuGet packages that run the same relay inside your own .NET host. Both read their settings from the `OutboxRelay` configuration section.
+The relay ships as container image `ghcr.io/pernix-labs/pernix-outbox-relay:<version>` and as nuget.org packages that run the same relay inside your own .NET host. Image and packages share one version. Both read their settings from the `OutboxRelay` configuration section.
 
 | Package | Role |
 |---|---|
@@ -152,11 +152,15 @@ dotnet add package Pernix.OutboxRelay.Outbox.PostgreSql
 dotnet add package Pernix.OutboxRelay.Destination.Kafka
 ```
 
+<!-- snippet: readme-embed-usings -->
 ```csharp
 using Pernix.OutboxRelay.Hosting;
 using Pernix.OutboxRelay.Outbox.PostgreSql;
 using Pernix.OutboxRelay.Destination.Kafka;
+```
 
+<!-- snippet: readme-embed-register -->
+```csharp
 builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination();
 
 var app = builder.Build();

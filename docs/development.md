@@ -18,7 +18,42 @@ curl -i http://localhost:5612/readyz
 docker build --platform linux/arm64 -t outbox-relay:local .
 ```
 
-Optional build args: `BUILD_VERSION` (default `1.0.0`) and `BUILD_COMMIT` (default `unknown`).
+Optional build args: `BUILD_VERSION` (default `1.0.0`) and `BUILD_COMMIT` (default `unknown`). CI builds set `BUILD_VERSION` to `0.0.0-ci.g<sha7>`.
+
+## CI/CD
+
+Workflows call the reusable workflows and actions of `Pernix-Labs/pernix-ci`, pinned at `v1.0.0`. Bump every pernix-ci line in every workflow together to the same ref. Release units are declared in [`.github/release-units.yml`](../.github/release-units.yml). Decision: [ADR 0013](adr/0013-adopt-pernix-ci-and-tag-only-versions.md).
+
+| Unit | Tag | Publishes |
+|---|---|---|
+| `relay` | `relay/vX.Y.Z` | Image `ghcr.io/pernix-labs/pernix-outbox-relay`, packages `Pernix.OutboxRelay.Core`, `Pernix.OutboxRelay.Hosting`, `Pernix.OutboxRelay.Outbox.PostgreSql`, `Pernix.OutboxRelay.Destination.Kafka` |
+| `client` | `client/vX.Y.Z` | Packages `Pernix.OutboxRelay.Client`, `Pernix.OutboxRelay.Client.PostgreSql`, `Pernix.OutboxRelay.Client.EntityFrameworkCore` |
+
+- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): on every PR and push to `main`. Secret scan, gates, build, test, image build and scan, pack dry check. A PR never pushes an image or package. A push to `main` pushes image `sha-<L>`.
+- [`.github/workflows/cd.yml`](../.github/workflows/cd.yml): on a release tag. `ci` (reuses or rebuilds image `sha-<L>` and runs the gates), then `release` (rescans and promotes `sha-<L>` to `X.Y.Z`), then `publish` (packs and pushes to nuget.org through Trusted Publishing, environment `release`).
+- [`.github/workflows/retention.yml`](../.github/workflows/retention.yml): daily GHCR image retention. Deletes `sha-*` and prerelease images after 14 days and keeps the 5 newest stable images. A manual run with `dry-run` lists planned deletions and deletes nothing.
+
+### Release
+
+Tag a commit on `main` and push the tag:
+
+```sh
+git tag relay/vX.Y.Z && git push origin relay/vX.Y.Z
+git tag client/vX.Y.Z && git push origin client/vX.Y.Z
+```
+
+- A prerelease suffix is allowed, for example `client/v2.1.0-rc.1`.
+- The version comes only from the tag. No file in the repo holds a version.
+- Re-running `cd.yml` for the same tag is idempotent. A change that alters the image digest needs a new patch tag. Never move an existing tag.
+- First tags: `relay/v1.0.0` and `client/v2.0.0`.
+
+`SERVICE_VERSION`: a released image reports `SERVICE_VERSION` and OTel `service.version` `0.0.0-ci.g<sha7>`, because the image is built once in CI and only promoted by tag. The release version exists only as the image tag. Deployments set env `SERVICE_VERSION=<image tag>`. Env vars override the image `ENV`. `SERVICE_COMMIT` is already the tagged commit.
+
+Prerequisites in repo and nuget.org settings:
+
+- Environment `release`, with deployment tags `relay/v*` and `client/v*`.
+- Repository variable `NUGET_USER`: the nuget.org profile that owns the Trusted Publishing policy.
+- nuget.org Trusted Publishing policy: owner `avataraps`, repository `pernix-outbox-relay`, workflow `cd.yml`, environment `release`, packages `Pernix.OutboxRelay.*`.
 
 ## Producer client packages
 
