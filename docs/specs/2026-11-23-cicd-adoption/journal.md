@@ -34,3 +34,6 @@ run: run_89372152684e
 - 2026-11-23T08:22:46Z verify-minted — coord 6 round 1, task task_31dcf5914c82
 - 2026-11-23T08:28:33Z verdict — coord 6 APPROVE
 - 2026-11-23T08:29:45Z closeout — docs sweep 04c18e5; all 6 coords approved
+- 2026-11-23T08:31:27Z note — closeout review: cd.yml/development.md say policy repository owner avataraps, GitHub owner is Pernix-Labs; asked foreman msg_b5187cd38966
+- 2026-11-23T08:31:36Z note — foreman O1: policy Repository Owner Pernix-Labs, Package Owner avataraps; rework fixes cd.yml header + development.md
+- 2026-11-23T08:32:27Z note — closeout review fix 152bf53 (policy repository owner Pernix-Labs); review otherwise clean
