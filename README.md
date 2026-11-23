@@ -192,4 +192,4 @@ Startup validates configuration, tables, grants and topics, and exits `1` on any
 
 ## Development
 
-Local run, docker build and measuring allocations: [`docs/development.md`](docs/development.md).
+Local run, docker build, CI/CD and releasing, and measuring allocations: [`docs/development.md`](docs/development.md).
