@@ -4,7 +4,7 @@
 #
 # nuget.org Trusted Publishing policy fields (nuget.org account owning the
 # packages -> Trusted Publishing -> add GitHub Actions policy):
-#   Repository owner: avataraps
+#   Repository owner: Pernix-Labs
 #   Repository:       pernix-outbox-relay
 #   Workflow file:    cd.yml
 #   Environment:      release

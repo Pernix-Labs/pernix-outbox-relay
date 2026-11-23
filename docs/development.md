@@ -52,8 +52,8 @@ git tag client/vX.Y.Z && git push origin client/vX.Y.Z
 Prerequisites in repo and nuget.org settings:
 
 - Environment `release`, with deployment tags `relay/v*` and `client/v*`.
-- Repository variable `NUGET_USER`: the nuget.org profile that owns the Trusted Publishing policy.
-- nuget.org Trusted Publishing policy: owner `avataraps`, repository `pernix-outbox-relay`, workflow `cd.yml`, environment `release`, packages `Pernix.OutboxRelay.*`.
+- Repository variable `NUGET_USER`: the nuget.org profile that owns the Trusted Publishing policy. Value: `avataraps`.
+- nuget.org Trusted Publishing policy: package owner (nuget.org) `avataraps`, repository owner `Pernix-Labs`, repository `pernix-outbox-relay`, workflow `cd.yml`, environment `release`, packages `Pernix.OutboxRelay.*`.
 
 ## Producer client packages
 
