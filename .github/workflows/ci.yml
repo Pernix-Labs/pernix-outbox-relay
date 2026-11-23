@@ -1,0 +1,19 @@
+# Per-commit CI for the relay and client units.
+# Copied from Pernix-Labs/pernix-ci templates/ci.yml @ v1.0.0. Keep the pin equal on every pernix-ci line.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    permissions:
+      contents: read
+      packages: write
+    uses: Pernix-Labs/pernix-ci/.github/workflows/ci.yml@v1.0.0
