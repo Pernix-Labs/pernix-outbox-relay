@@ -18,7 +18,7 @@ The target producers and consumers run net8.0 to net10.0 with Npgsql 8 to 10.
 
 The relay ships as an image only, and producer client packages ship as NuGet from this repo (amended ruling, Q1). Plain SQL stays a supported integration.
 
-- **Package split and ids (D1, D2).** Core `Pernix.OutboxRelay.Client` (no package dependencies) plus one package per engine, starting with `Pernix.OutboxRelay.Client.PostgreSql` (Npgsql and `Microsoft.Extensions.DependencyInjection.Abstractions` only). ORM add-ons are separate packages (EF Core in a later spec). No client package depends on a `Pernix.*` package. Client code lives under `client/`, versioned in lockstep by one `VersionPrefix`.
+- **Package split and ids (D1, D2).** Core `Pernix.OutboxRelay.Client` (no package dependencies) plus one package per engine, starting with `Pernix.OutboxRelay.Client.PostgreSql` (Npgsql and `Microsoft.Extensions.DependencyInjection.Abstractions` only). ORM add-ons are separate packages (EF Core in a later spec). No client package depends on a `Pernix.*` package. Client code lives under `client/`, versioned in lockstep by one `VersionPrefix`. Superseded by [0013](./0013-adopt-pernix-ci-and-tag-only-versions.md): the client packages take one version from the `client/vX.Y.Z[-pre]` tag, and no file holds it.
 - **Publish API without autocommit (D3 = O9, Q6).** `IOutboxPublisher.PublishAsync(DbTransaction, ...)` for an open transaction and `PublishEnlistedAsync(DbConnection, ...)` for an ambient `TransactionScope` only, each with a single and a batch overload. No overload publishes without a transaction. `PublishEnlistedAsync` throws when `Transaction.Current` is null.
 - **Raw Npgsql in the client, not Dapper (Q3).** The provider uses `NpgsqlCommand` and `NpgsqlBatch` with typed parameters and SQL text built once per publisher. The "Dapper for data access" ruling of ADR 0005 covers relay reads and commits and stays unchanged.
 - **DDL accessor from embedded V001 (D11 = O20, D12 = O21).** The provider embeds `sql/postgresql/V001__create_outbox.sql` by link and `PostgreSqlOutboxSchema.Scripts(table, namePrefix)` renders it by token replacement for any table and index/constraint name prefix. It refuses a prefix whose rendered names exceed 63 bytes. Neither the package nor the relay runs DDL. The producer's migration tool or DBA applies the text.
@@ -71,6 +71,8 @@ The "NuGet publish workflow and a consumer guide follow in a later spec" consequ
 
 - `.github/workflows/publish-client-nuget.yml` (manual dispatch) publishes all three packages at one version to GitHub Packages. `publish-client-nuget-dry-run.yml` packs and checks them on pull requests and never pushes.
 - Consumer guide: [`docs/client-packages.md`](../client-packages.md).
+
+Superseded by [0013](./0013-adopt-pernix-ci-and-tag-only-versions.md): both workflows are replaced by pernix-ci. A `client/v*` tag publishes the client packages to nuget.org through `cd.yml` with Trusted Publishing, and PR CI packs them as a dry check.
 
 ## Amendment 2026-11-08: route column and route-scoped services (spec 2026-11-08-client-route)
 

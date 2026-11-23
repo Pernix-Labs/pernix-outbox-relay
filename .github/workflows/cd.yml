@@ -1,0 +1,80 @@
+# Caller template: release one unit per tag.
+# Copy to .github/workflows/cd.yml in the caller repo. The file MUST keep the
+# name cd.yml.
+#
+# nuget.org Trusted Publishing policy fields (nuget.org account owning the
+# packages -> Trusted Publishing -> add GitHub Actions policy):
+#   Repository owner: Pernix-Labs
+#   Repository:       pernix-outbox-relay
+#   Workflow file:    cd.yml
+#   Environment:      release
+# Set repository variable NUGET_USER to the nuget.org profile name (user or
+# organization) that owns the policy. Create environment `release` in the
+# caller repo settings.
+#
+# Why `publish` lives here and not inside a pernix-ci reusable workflow: the
+# policy matches the OIDC token claims for the workflow file and environment.
+# A job inside a reusable workflow carries the reusable workflow's file, so the
+# token would not match. `nuget-push` is a composite action and runs inside
+# this file's `publish` job, so the claims stay cd.yml + release.
+#
+# Jobs: `ci` (reuses or rebuilds image sha-<L>, runs gates) -> `release`
+# (rescans and promotes sha-<L> to <version>) -> `publish` (packs and pushes
+# NuGet packages). `id-token: write` is granted to `publish` only.
+#
+# Pin pernix-ci by vX.Y.Z tag or full commit sha, never a branch. Use the same
+# ref on every pernix-ci line below.
+name: cd
+
+on:
+  push:
+    tags: ['v*', '*/v*']
+
+concurrency: cd-${{ github.ref }}
+
+jobs:
+  ci:
+    permissions:
+      contents: read
+      packages: write
+    uses: Pernix-Labs/pernix-ci/.github/workflows/ci.yml@v1.0.1
+    with:
+      tag: ${{ github.ref_name }}
+
+  release:
+    needs: ci
+    permissions:
+      contents: read
+      packages: write
+    uses: Pernix-Labs/pernix-ci/.github/workflows/cd.yml@v1.0.1
+    with:
+      tag: ${{ github.ref_name }}
+
+  publish:
+    needs: release
+    if: needs.release.outputs.packages != ''
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.commit }}
+          persist-credentials: false
+
+      - uses: Pernix-Labs/pernix-ci/actions/dotnet-setup@v1.0.1
+
+      - uses: Pernix-Labs/pernix-ci/actions/dotnet-restore@v1.0.1
+
+      - id: pack
+        uses: Pernix-Labs/pernix-ci/actions/nuget-pack@v1.0.1
+        with:
+          projects: ${{ needs.release.outputs.packages }}
+          version: ${{ needs.release.outputs.version }}
+
+      - uses: Pernix-Labs/pernix-ci/actions/nuget-push@v1.0.1
+        with:
+          packages: ${{ steps.pack.outputs.packages }}
+          user: ${{ vars.NUGET_USER }}

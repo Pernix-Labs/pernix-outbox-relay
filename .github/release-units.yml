@@ -1,0 +1,21 @@
+# Release units for pernix-ci (https://github.com/Pernix-Labs/pernix-ci, ADR 0007).
+# Tag <unit>/vX.Y.Z[-pre] releases one unit. Version comes from the tag only.
+units:
+  - name: relay
+    image:
+      project: src/Pernix.OutboxRelay.Host/Pernix.OutboxRelay.Host.csproj
+      dockerfile: Dockerfile
+      context: .
+      name: pernix-outbox-relay
+    packages:
+      - src/Pernix.OutboxRelay.Core/Pernix.OutboxRelay.Core.csproj
+      - src/Pernix.OutboxRelay.Hosting/Pernix.OutboxRelay.Hosting.csproj
+      - src/Pernix.OutboxRelay.Outbox.PostgreSql/Pernix.OutboxRelay.Outbox.PostgreSql.csproj
+      - src/Pernix.OutboxRelay.Destination.Kafka/Pernix.OutboxRelay.Destination.Kafka.csproj
+    extra-inputs:
+      - src/RelayPackage.props   # imported by relay csprojs, copied by Dockerfile COPY src/
+  - name: client
+    packages:
+      - client/src/Pernix.OutboxRelay.Client/Pernix.OutboxRelay.Client.csproj
+      - client/src/Pernix.OutboxRelay.Client.PostgreSql/Pernix.OutboxRelay.Client.PostgreSql.csproj
+      - client/src/Pernix.OutboxRelay.Client.EntityFrameworkCore/Pernix.OutboxRelay.Client.EntityFrameworkCore.csproj

@@ -12,6 +12,10 @@ Deploying and running the relay with a PostgreSQL outbox and a Kafka destination
 
 ## 2. Deploy
 
+- Image: `ghcr.io/pernix-labs/pernix-outbox-relay:<version>`.
+- Set env `SERVICE_VERSION=<version>` in the deployment. Without it, telemetry `service.version` is `0.0.0-ci.g<sha7>`, the CI build version baked into the image.
+- `SERVICE_COMMIT` comes from the image and needs no setting.
+
 ### 2a. appsettings
 
 One `PerKey` outbox on table `public.outbox`, delivering to Kafka destination `Snapshots`, with dead letters to Kafka destination `SnapshotsDlq`. Relay settings sit under the `OutboxRelay` section. The file is [`docs/runbook-appsettings.example.json`](runbook-appsettings.example.json). `RunbookExampleTests` binds and validates it, and checks that this section embeds it verbatim.

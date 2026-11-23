@@ -1,0 +1,22 @@
+# Daily GHCR image retention for pernix-outbox-relay images.
+# Copied from Pernix-Labs/pernix-ci templates/retention.yml @ v1.0.1. Keep the pin equal on every pernix-ci line.
+name: retention
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: List planned deletions and delete nothing.
+        type: boolean
+        default: false
+
+jobs:
+  retention:
+    permissions:
+      contents: read
+      packages: write
+    uses: Pernix-Labs/pernix-ci/.github/workflows/image-retention.yml@v1.0.1
+    with:
+      dry-run: ${{ inputs.dry-run || false }}

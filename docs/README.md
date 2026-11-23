@@ -17,7 +17,7 @@ Deploying and operating the relay (config examples, database prerequisites, aler
 | [`embedding.md`](./embedding.md) | Service owners | Run the relay in your own .NET host with `Pernix.OutboxRelay.Hosting`: install, registration, health mapping, telemetry helpers, configuration, host implications. |
 | [`client-packages.md`](./client-packages.md) | Producers | Producer client packages: install, outbox table, grants, publish paths, contracts, first publish. |
 | [`runbook.md`](./runbook.md) | Operators | Deploy, database prerequisites, health, alerts, incidents, duplicates. |
-| [`development.md`](./development.md) | Relay developers | Local run, local docker build, measuring allocations. |
+| [`development.md`](./development.md) | Relay developers | Local run, local docker build, CI/CD and releasing, measuring allocations. |
 | [`product.md`](./product.md) | Everyone | Product purpose, users and features. |
 | [`BASELINE.md`](../benchmarks/Pernix.OutboxRelay.Benchmarks/BASELINE.md) | Relay developers | Relay allocation baseline and the dated sections later allocation changes append. |
 

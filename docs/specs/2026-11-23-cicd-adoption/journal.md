@@ -1,0 +1,45 @@
+# Journal: 2026-11-23-cicd-adoption
+run: run_89372152684e
+
+- 2026-11-23T08:00:35Z run-created — run_89372152684e
+- 2026-11-23T08:00:35Z supervised — task task_4654c548104b dispatch ctx_a0f358e6ea32
+- 2026-11-23T08:04:33Z gate — ask gate_934c9cc3e586 on task_dcc7978760bc (status completed): approve requirements.md, Q1-Q4 open
+- 2026-11-23T08:05:01Z gate — requirements.md approve (foreman): Q1 accept + document SERVICE_VERSION-from-image-tag fix path in runbook+development.md; Q2 pernix-outbox-relay; Q3 accept, no template deviation; Q4 document relay/v1.0.0 and client/v2.0.0 as first tags, none pushed; env release + NUGET_USER via gh api else escalate with exact commands
+- 2026-11-23T08:07:24Z gate — ask gate_feab174774bb on task_dd50927444db (status completed): approve design.md
+- 2026-11-23T08:07:42Z gate — design.md approve (foreman)
+- 2026-11-23T08:09:53Z gate — dag revised (task 7 PR removed: PR is coordinator closeout)
+- 2026-11-23T08:09:59Z gate — ask gate_8312843718b1 on task_163fef74a200 (status completed): approve tasks.md
+- 2026-11-23T08:10:16Z gate — tasks.md approve (foreman): task 2 stays out of docs/, task 5 owns every doc edit
+- 2026-11-23T08:10:18Z dag-materialized — 6 created, 0 replaced, 0 orphaned, 0 unchanged (map: .claude/orca-spec/runs/run_89372152684e/dag-map.json)
+- 2026-11-23T08:10:39Z note — dispatched coord 2 ctx_47396be90c7c, coord 3 ctx_e0e7352a2bd6
+- 2026-11-23T08:11:10Z worker_done — coord 3, sha none, env release (relay/v*, client/v*) + NUGET_USER=avataraps created
+- 2026-11-23T08:11:10Z verify-minted — coord 3 round 1, task task_7e4b3346ec53
+- 2026-11-23T08:11:33Z verdict — coord 3 APPROVE
+- 2026-11-23T08:11:44Z worker_done — coord 2, sha c4d8d3a, version files + platform-cicd workarounds removed, NuGetAudit all/high
+- 2026-11-23T08:11:44Z verify-minted — coord 2 round 1, task task_1fa59578f754
+- 2026-11-23T08:12:11Z worker_done — coord 1, sha 7dc1e3b, .github units + pernix-ci workflows @v1.0.0
+- 2026-11-23T08:12:11Z verify-minted — coord 1 round 1, task task_0fde246c4b58
+- 2026-11-23T08:12:51Z verdict — coord 2 APPROVE
+- 2026-11-23T08:13:11Z worker_done — coord 4, sha efcf951, ADR 0013 + supersede annotations
+- 2026-11-23T08:13:11Z verify-minted — coord 4 round 1, task task_aa9941fd1005
+- 2026-11-23T08:13:25Z verdict — coord 1 APPROVE
+- 2026-11-23T08:13:54Z verdict — coord 4 APPROVE
+- 2026-11-23T08:14:48Z note — coord 5 question msg_cf5a9ad621ce: pre-existing README snippet test failure; asked foreman msg_4237768634b1
+- 2026-11-23T08:15:11Z note — foreman O1: coord 5 also fixes README 'Embed in your host' snippet marker (compiled Snippets/*.cs + 3 relay ProjectReferences in client docs test project). Cause: pre-existing since #3, uncaught because the repo had no CI. Docs test project joins relay unit too (extra CI runs only).
+- 2026-11-23T08:16:23Z worker_done — coord 5, sha 093f3c9, docs CI/CD + release; README embed snippet compiled (O1)
+- 2026-11-23T08:16:23Z verify-minted — coord 5 round 1, task task_77be31dcbbb0
+- 2026-11-23T08:16:31Z note — coord 6 held until coord 5 verify ends: both run dotnet builds in the shared worktree
+- 2026-11-23T08:17:16Z verdict — coord 5 APPROVE
+- 2026-11-23T08:22:46Z worker_done — coord 6, sha 2f730fd, local gate: build 0 warn, 1888 pass/17 skip/0 fail, docker ok, actionlint ok, no tags
+- 2026-11-23T08:22:46Z verify-minted — coord 6 round 1, task task_31dcf5914c82
+- 2026-11-23T08:28:33Z verdict — coord 6 APPROVE
+- 2026-11-23T08:29:45Z closeout — docs sweep 04c18e5; all 6 coords approved
+- 2026-11-23T08:31:27Z note — closeout review: cd.yml/development.md say policy repository owner avataraps, GitHub owner is Pernix-Labs; asked foreman msg_b5187cd38966
+- 2026-11-23T08:31:36Z note — foreman O1: policy Repository Owner Pernix-Labs, Package Owner avataraps; rework fixes cd.yml header + development.md
+- 2026-11-23T08:32:27Z note — closeout review fix 152bf53 (policy repository owner Pernix-Labs); review otherwise clean
+- 2026-11-23T08:32:53Z gate — ask gate_bf3f5fd0ea3a on task_045f72a2706a (status completed): PR #4 verdict
+- 2026-11-23T08:36:51Z note — PR #4 CI red (run 45139512508, 2 attempts): pernix-ci v1.0.0 reusable ci.yml default working-directory '.' -> dotnet-restore hashFiles('repo/./**/...') -> 'Invalid pattern ... Relative pathing . is not allowed'. pernix-ci bug, hits every template caller; external-caller test uses blocks with 'caller' so missed it. Asked foreman.
+- 2026-11-23T08:37:28Z note — foreman O1: pernix-ci fix + v1.0.1 dispatched by foreman; PR #4 held until v1.0.1 sha arrives, then pin rework + CI re-run
+- 2026-11-23T10:40:21Z note — pernix-ci v1.0.1 released (1bf0fae, fixes default working-directory); rework pins v1.0.0 -> v1.0.1
+- 2026-11-23T10:41:35Z note — pin rework 6e2ea89 (v1.0.1; v1.0.1 templates still say @v1.0.0, caller ref differs by design)
+- 2026-11-23T10:51:40Z gate — ask gate_bf3f5fd0ea3a on task_045f72a2706a (status completed): PR #4 updated, CI green run 45158391541, verdict

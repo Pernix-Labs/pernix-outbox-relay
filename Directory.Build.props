@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- platform-cicd generates its own nuget.config without packageSourceMapping, so NU1507 must stay a warning. -->
-    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1507</WarningsNotAsErrors>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>high</NuGetAuditLevel>
     <IsPackable>false</IsPackable>
 
     <Company>Pernix</Company>
