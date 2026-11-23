@@ -1,5 +1,5 @@
 # Daily GHCR image retention for pernix-outbox-relay images.
-# Copied from Pernix-Labs/pernix-ci templates/retention.yml @ v1.0.0. Keep the pin equal on every pernix-ci line.
+# Copied from Pernix-Labs/pernix-ci templates/retention.yml @ v1.0.1. Keep the pin equal on every pernix-ci line.
 name: retention
 
 on:
@@ -17,6 +17,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: Pernix-Labs/pernix-ci/.github/workflows/image-retention.yml@v1.0.0
+    uses: Pernix-Labs/pernix-ci/.github/workflows/image-retention.yml@v1.0.1
     with:
       dry-run: ${{ inputs.dry-run || false }}

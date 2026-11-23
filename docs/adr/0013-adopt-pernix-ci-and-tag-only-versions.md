@@ -16,9 +16,9 @@ Human rulings 2026-11-22: version comes from the release tag only, Trusted Publi
 
 ## Decision
 
-CI/CD runs on pernix-ci `v1.0.0` templates, the repo holds no version, and each release unit takes its version from a `<unit>/vX.Y.Z[-pre]` tag.
+CI/CD runs on pernix-ci `v1.0.1` templates, the repo holds no version, and each release unit takes its version from a `<unit>/vX.Y.Z[-pre]` tag.
 
-- **Pin (D1).** Every pernix-ci line in `.github/workflows/ci.yml`, `cd.yml` and `retention.yml` pins `@v1.0.0`, tag commit `50c1228ba4f77d3219a270fbf3dcfee7ccf84781`. The workflows are template copies, only header comments differ (D2). A bump changes every line to the same ref.
+- **Pin (D1).** Every pernix-ci line in `.github/workflows/ci.yml`, `cd.yml` and `retention.yml` pins `@v1.0.1`, tag commit `1bf0faeb0e4c529e190692e15f68ee9c4e42f8a7`. v1.0.1 replaces the first pernix-ci release, whose reusable `ci.yml` default working-directory `.` broke `dotnet-restore`. The workflows are template copies, only header comments and the pernix-ci ref differ (D2), because the v1.0.1 templates still reference the first release tag. A bump changes every line to the same ref.
 - **Units.** `.github/release-units.yml` declares `relay` (image `src/Pernix.OutboxRelay.Host`, packages Core, Hosting, `Outbox.PostgreSql`, `Destination.Kafka`, extra input `src/RelayPackage.props`) and `client` (packages `Pernix.OutboxRelay.Client`, `.Client.PostgreSql`, `.Client.EntityFrameworkCore`).
 - **Tag-only versions.** Tag grammar `<unit>/vX.Y.Z[-pre]`, enforced by pernix-ci `release-tag` on a `main` commit. `nuget-pack` passes `-p:Version` and `-p:PackageVersion` from the tag. `.version` and `client/PackageVersion.props` are deleted, and `src/RelayPackage.props` sets no `VersionPrefix`.
 - **Image (D3).** `ghcr.io/pernix-labs/pernix-outbox-relay`. CI on `main` pushes `sha-<L>`. A `relay/v*` tag promotes that image to `X.Y.Z[-pre]` without rebuild. `retention.yml` runs daily with template defaults: sha and prerelease tags kept 14 days, the 5 newest stable tags kept.
@@ -30,7 +30,7 @@ CI/CD runs on pernix-ci `v1.0.0` templates, the repo holds no version, and each 
 
 ## Alternatives considered
 
-- **Pin pernix-ci by full sha.** Allowed by pernix-ci, but the templates already pin `@v1.0.0`, so a tag pin keeps caller files template-identical. A sha pin adds a deviation per line.
+- **Pin pernix-ci by full sha.** Allowed by pernix-ci, but the templates pin by tag, so a tag pin keeps caller files template-identical apart from the ref. A sha pin adds a deviation per line.
 - **Pin the moving `v1`.** pernix-ci forbids it for Trusted Publishing callers, because the workflow ref is part of the trust claim.
 - **Keep the version files and check them against the tag.** Two sources for one value, and a mismatch fails only at release time.
 - **NuGet API key secret.** Rejected by ruling. A long-lived credential where OIDC works.
@@ -46,4 +46,4 @@ CI/CD runs on pernix-ci `v1.0.0` templates, the repo holds no version, and each 
 - Test projects that reference both relay and client projects join both units (D8). The `client` leg runs relay tests, and client edits rebuild the relay image. Extra CI work, no correctness impact.
 - Benchmark projects have no CI build coverage. A benchmark that stops compiling is found locally.
 - `cd.yml` file name and environment `release` are part of the nuget.org Trusted Publishing policy. Renaming either breaks publish.
-- cd and retention are validated by actionlint and template diff only, because pernix-ci `v1.0.0` has no CD dry-run (D9).
+- cd and retention are validated by actionlint and template diff only, because pernix-ci `v1.0.1` has no CD dry-run (D9).

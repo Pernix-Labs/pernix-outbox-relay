@@ -37,7 +37,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: Pernix-Labs/pernix-ci/.github/workflows/ci.yml@v1.0.0
+    uses: Pernix-Labs/pernix-ci/.github/workflows/ci.yml@v1.0.1
     with:
       tag: ${{ github.ref_name }}
 
@@ -46,7 +46,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: Pernix-Labs/pernix-ci/.github/workflows/cd.yml@v1.0.0
+    uses: Pernix-Labs/pernix-ci/.github/workflows/cd.yml@v1.0.1
     with:
       tag: ${{ github.ref_name }}
 
@@ -64,17 +64,17 @@ jobs:
           ref: ${{ needs.release.outputs.commit }}
           persist-credentials: false
 
-      - uses: Pernix-Labs/pernix-ci/actions/dotnet-setup@v1.0.0
+      - uses: Pernix-Labs/pernix-ci/actions/dotnet-setup@v1.0.1
 
-      - uses: Pernix-Labs/pernix-ci/actions/dotnet-restore@v1.0.0
+      - uses: Pernix-Labs/pernix-ci/actions/dotnet-restore@v1.0.1
 
       - id: pack
-        uses: Pernix-Labs/pernix-ci/actions/nuget-pack@v1.0.0
+        uses: Pernix-Labs/pernix-ci/actions/nuget-pack@v1.0.1
         with:
           projects: ${{ needs.release.outputs.packages }}
           version: ${{ needs.release.outputs.version }}
 
-      - uses: Pernix-Labs/pernix-ci/actions/nuget-push@v1.0.0
+      - uses: Pernix-Labs/pernix-ci/actions/nuget-push@v1.0.1
         with:
           packages: ${{ steps.pack.outputs.packages }}
           user: ${{ vars.NUGET_USER }}

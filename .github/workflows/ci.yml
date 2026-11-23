@@ -1,5 +1,5 @@
 # Per-commit CI for the relay and client units.
-# Copied from Pernix-Labs/pernix-ci templates/ci.yml @ v1.0.0. Keep the pin equal on every pernix-ci line.
+# Copied from Pernix-Labs/pernix-ci templates/ci.yml @ v1.0.1. Keep the pin equal on every pernix-ci line.
 name: ci
 
 on:
@@ -16,4 +16,4 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: Pernix-Labs/pernix-ci/.github/workflows/ci.yml@v1.0.0
+    uses: Pernix-Labs/pernix-ci/.github/workflows/ci.yml@v1.0.1

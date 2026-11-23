@@ -22,7 +22,7 @@ Optional build args: `BUILD_VERSION` (default `1.0.0`) and `BUILD_COMMIT` (defau
 
 ## CI/CD
 
-Workflows call the reusable workflows and actions of `Pernix-Labs/pernix-ci`, pinned at `v1.0.0`. Bump every pernix-ci line in every workflow together to the same ref. Release units are declared in [`.github/release-units.yml`](../.github/release-units.yml). Decision: [ADR 0013](adr/0013-adopt-pernix-ci-and-tag-only-versions.md).
+Workflows call the reusable workflows and actions of `Pernix-Labs/pernix-ci`, pinned at `v1.0.1` (commit `1bf0fae`). Bump every pernix-ci line in every workflow together to the same ref. Release units are declared in [`.github/release-units.yml`](../.github/release-units.yml). Decision: [ADR 0013](adr/0013-adopt-pernix-ci-and-tag-only-versions.md).
 
 | Unit | Tag | Publishes |
 |---|---|---|
