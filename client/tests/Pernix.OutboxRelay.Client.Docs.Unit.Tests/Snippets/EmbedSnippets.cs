@@ -12,7 +12,9 @@ internal static class EmbedSnippets
     public static WebApplication Register(WebApplicationBuilder builder)
     {
         #region docs:readme-embed-register
-        builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination();
+        builder.AddOutboxRelay()
+            .AddPostgreSqlOutbox()
+            .AddKafkaDestination();
 
         var app = builder.Build();
         app.MapOutboxRelayHealth();   // optional: /livez and /readyz

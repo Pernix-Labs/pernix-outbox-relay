@@ -1,6 +1,8 @@
 using Pernix.OutboxRelay.Client.EntityFrameworkCore;
 using Pernix.OutboxRelay.Client.PostgreSql;
 using Dapper;
+using MessagePack;
+using MessagePack.Resolvers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -57,9 +59,12 @@ internal static class ReadmeSnippets
             return;
         }
 
-        var headers = OutboxHeaders.CreateBuilder(1).Add("idempotency-key", eventId.ToString()).Build();
+        var headers = OutboxHeaders.CreateBuilder(1)
+            .Add("idempotency-key", eventId.ToString())
+            .Build();
         var changed = new RuleSetChanged(eventId, ruleSet.Id);
-        var message = OutboxMessage.Json(ruleSet.Id.ToString(), changed, RiskJson.Default.RuleSetChanged, headers);
+        var payload = MessagePackSerializer.Serialize(changed, ContractlessStandardResolver.Options, ct);
+        var message = OutboxMessage.Create(ruleSet.Id.ToString(), payload, headers);
 
         // Outbox row last, on the same transaction.
         await publisher.PublishAsync(transaction, message, ct);
@@ -76,7 +81,9 @@ public sealed class UpdateRuleSetHandler(IUnitOfWork unitOfWork, IRuleSetReposit
         var ruleSet = await ruleSets.GetAsync(ruleSetId, ct);
         ruleSet.Definition = definition;
 
-        var headers = OutboxHeaders.CreateBuilder(1).Add("idempotency-key", eventId.ToString()).Build();
+        var headers = OutboxHeaders.CreateBuilder(1)
+            .Add("idempotency-key", eventId.ToString())
+            .Build();
         var changed = new RuleSetChanged(eventId, ruleSetId);
         outbox.Enqueue(OutboxMessage.Json(ruleSetId.ToString(), changed, RiskJson.Default.RuleSetChanged, headers));
 

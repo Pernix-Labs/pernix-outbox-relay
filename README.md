@@ -8,6 +8,56 @@ Outbox Relay is a transactional outbox for .NET and PostgreSQL. The producer ins
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20client%20%7C%2010.0%20relay-purple.svg)](https://dotnet.microsoft.com/)
 
+The relay runs from configuration alone. One outbox table to one Kafka topic:
+
+<!-- config: readme-minimal -->
+```json
+{
+  "OutboxRelay": {
+    "KafkaClusters": {
+      "Main": {
+        "BootstrapServers": "kafka:9092"
+      }
+    },
+    "Destinations": [
+      {
+        "Name": "RiskEvents",
+        "Transport": "Kafka",
+        "Kafka": {
+          "Cluster": "Main",
+          "Topic": "risk.events"
+        }
+      }
+    ],
+    "Outboxes": [
+      {
+        "Name": "Risk",
+        "Destination": "RiskEvents",
+        "Database": {
+          "Provider": "PostgreSql",
+          "Connection": "RiskDb",
+          "Table": "risk.outbox"
+        },
+        "Ordering": {
+          "Mode": "PerKey"
+        }
+      }
+    ]
+  }
+}
+```
+
+Mount the file into the image and pass the connection string as an environment variable:
+
+```shell
+docker run \
+  -v "$PWD/appsettings.json:/app/appsettings.Production.json:ro" \
+  -e OutboxRelay__ConnectionStrings__RiskDb="Host=risk-db;Database=risk;Username=outbox_relay;Password=<secret>" \
+  ghcr.io/pernix-labs/pernix-outbox-relay:<version>
+```
+
+The producer enqueues the event in the same EF Core transaction as the business change:
+
 <!-- snippet: readme-ef-uow-handler -->
 ```csharp
 public sealed class UpdateRuleSetHandler(IUnitOfWork unitOfWork, IRuleSetRepository ruleSets, IOutboxQueue<RiskDb> outbox)
@@ -17,7 +67,9 @@ public sealed class UpdateRuleSetHandler(IUnitOfWork unitOfWork, IRuleSetReposit
         var ruleSet = await ruleSets.GetAsync(ruleSetId, ct);
         ruleSet.Definition = definition;
 
-        var headers = OutboxHeaders.CreateBuilder(1).Add("idempotency-key", eventId.ToString()).Build();
+        var headers = OutboxHeaders.CreateBuilder(1)
+            .Add("idempotency-key", eventId.ToString())
+            .Build();
         var changed = new RuleSetChanged(eventId, ruleSetId);
         outbox.Enqueue(OutboxMessage.Json(ruleSetId.ToString(), changed, RiskJson.Default.RuleSetChanged, headers));
 
@@ -34,6 +86,23 @@ public sealed class UpdateRuleSetHandler(IUnitOfWork unitOfWork, IRuleSetReposit
 Business write and outbox row commit together → the relay leader polls the table → each row goes to its Kafka topic → the row is deleted once the broker confirms it.
 
 ![Flow](docs/flow.svg)
+
+## Contents
+
+- [Why](#why)
+- [Packages & installation](#packages--installation)
+- [Quick start](#quick-start)
+  - [1. Create the outbox table](#1-create-the-outbox-table)
+  - [2. Register](#2-register)
+  - [3. Publish](#3-publish)
+  - [4. Run the relay](#4-run-the-relay)
+- [How it works](#how-it-works)
+- [Configuration](#configuration)
+  - [Run the image](#run-the-image)
+- [Performance](#performance)
+- [Documentation](#documentation)
+- [Development](#development)
+- [License](#license)
 
 ## Why
 
@@ -137,9 +206,12 @@ if (updated != 1)
     return;
 }
 
-var headers = OutboxHeaders.CreateBuilder(1).Add("idempotency-key", eventId.ToString()).Build();
+var headers = OutboxHeaders.CreateBuilder(1)
+    .Add("idempotency-key", eventId.ToString())
+    .Build();
 var changed = new RuleSetChanged(eventId, ruleSet.Id);
-var message = OutboxMessage.Json(ruleSet.Id.ToString(), changed, RiskJson.Default.RuleSetChanged, headers);
+var payload = MessagePackSerializer.Serialize(changed, ContractlessStandardResolver.Options, ct);
+var message = OutboxMessage.Create(ruleSet.Id.ToString(), payload, headers);
 
 // Outbox row last, on the same transaction.
 await publisher.PublishAsync(transaction, message, ct);
@@ -161,7 +233,9 @@ using Pernix.OutboxRelay.Destination.Kafka;
 
 <!-- snippet: readme-embed-register -->
 ```csharp
-builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination();
+builder.AddOutboxRelay()
+    .AddPostgreSqlOutbox()
+    .AddKafkaDestination();
 
 var app = builder.Build();
 app.MapOutboxRelayHealth();   // optional: /livez and /readyz
@@ -193,18 +267,36 @@ Image and embedded relay read the same `OutboxRelay` configuration section, from
 {
   "OutboxRelay": {
     "KafkaClusters": {
-      "Main": { "BootstrapServers": "b-1.msk:9092,b-2.msk:9092" }
+      "Main": {
+        "BootstrapServers": "b-1.msk:9092,b-2.msk:9092"
+      }
     },
     "Destinations": [
-      { "Name": "Snapshots", "Transport": "Kafka", "Kafka": { "Cluster": "Main", "Topic": "riskbackoffice.snapshots" } }
+      {
+        "Name": "Snapshots",
+        "Transport": "Kafka",
+        "Kafka": {
+          "Cluster": "Main",
+          "Topic": "riskbackoffice.snapshots"
+        }
+      }
     ],
     "Outboxes": [
       {
         "Name": "ConfigSnapshots",
         "Destination": "Snapshots",
-        "Database": { "Provider": "PostgreSql", "Connection": "Main", "Table": "public.outbox" },
-        "Polling": { "Interval": "00:00:01", "BatchSize": 500 },
-        "Ordering": { "Mode": "PerKey" }
+        "Database": {
+          "Provider": "PostgreSql",
+          "Connection": "Main",
+          "Table": "public.outbox"
+        },
+        "Polling": {
+          "Interval": "00:00:01",
+          "BatchSize": 500
+        },
+        "Ordering": {
+          "Mode": "PerKey"
+        }
       }
     ]
   }
@@ -214,6 +306,22 @@ Image and embedded relay read the same `OutboxRelay` configuration section, from
 The excerpt leaves out the connection string, retry, dead-letter and failure-policy settings. Every setting, its default and the startup checks: [`docs/configuration.md`](docs/configuration.md).
 
 ### Run the image
+
+A minimal Dockerfile copies the config file into the image. To mount it at run time instead, use the `docker run` at the [top of this page](#pernix-outbox-relay).
+
+```dockerfile
+FROM ghcr.io/pernix-labs/pernix-outbox-relay:<version>
+COPY appsettings.json /app/appsettings.Production.json
+```
+
+The connection string is a secret, so pass it as an environment variable at run time and keep it out of the image:
+
+```shell
+docker build -t my-relay .
+docker run \
+  -e OutboxRelay__ConnectionStrings__RiskDb="Host=risk-db;Database=risk;Username=outbox_relay;Password=<secret>" \
+  my-relay
+```
 
 - **Configuration.** appsettings (mounted as `/app/appsettings.Production.json`) or the same settings as environment variables. All sources load once at startup: a change needs a restart.
 - **Database.** The relay role needs `SELECT, UPDATE, DELETE` on the outbox table, plus `pg_monitor` for the `outbox.gate_lag` gauge. Connect directly to the primary endpoint: no RDS Proxy, no PgBouncer transaction pooling, because leadership uses session advisory locks. [Database prerequisites](docs/runbook.md#3-database-prerequisites).

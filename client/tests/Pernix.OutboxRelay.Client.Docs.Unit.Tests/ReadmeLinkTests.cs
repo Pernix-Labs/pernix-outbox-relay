@@ -28,6 +28,33 @@ public sealed partial class ReadmeLinkTests
         Assert.True(failures.Count == 0, document + " links that do not resolve:\n" + string.Join("\n", failures));
     }
 
+    [Fact]
+    public void Readme_contents_lists_every_later_section_heading_in_order()
+    {
+        var readme = RepoFiles.ReadDocument(RepoFiles.Readme).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var headings = Headings(readme);
+        var contents = headings.FindIndex(h => h is { Level: 2, Text: "Contents" });
+        Assert.True(contents >= 0, "README.md: no '## Contents' heading.");
+
+        var expected = headings
+            .Skip(contents + 1)
+            .Where(h => h.Level is 2 or 3)
+            .Select(h => $"{h.Level - 2}|{h.Text}|{h.Slug}")
+            .ToList();
+
+        var section = readme[(readme.IndexOf("\n## Contents\n", StringComparison.Ordinal) + "\n## Contents\n".Length)..];
+        section = section[..section.IndexOf("\n## ", StringComparison.Ordinal)];
+        var actual = new List<string>();
+        foreach (var line in section.Split('\n').Where(l => l.Length > 0))
+        {
+            var entry = ContentsEntryRegex().Match(line);
+            Assert.True(entry.Success, "README.md Contents: not a '- [text](#anchor)' entry: " + line);
+            actual.Add($"{entry.Groups["indent"].Length / 2}|{entry.Groups["text"].Value}|{entry.Groups["slug"].Value}");
+        }
+
+        Assert.Equal(expected, actual);
+    }
+
     [Theory]
     [InlineData("## Delivery (`Ordering.Mode` `None`)", "delivery-orderingmode-none")]
     [InlineData("### `outbox.pending` error bounds", "outboxpending-error-bounds")]
@@ -111,9 +138,11 @@ public sealed partial class ReadmeLinkTests
         return links;
     }
 
-    private static List<string> Anchors(string markdown)
+    private static List<string> Anchors(string markdown) => Headings(markdown).Select(h => h.Slug).ToList();
+
+    private static List<Heading> Headings(string markdown)
     {
-        var anchors = new List<string>();
+        var headings = new List<Heading>();
         var seen = new Dictionary<string, int>(StringComparer.Ordinal);
         var inFence = false;
         foreach (var line in markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
@@ -132,26 +161,32 @@ public sealed partial class ReadmeLinkTests
 
             var text = LinkRegex().Replace(heading.Groups["text"].Value.Trim(), m => m.Groups["text"].Value);
             var slug = string.Concat(text.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c is ' ' or '-' or '_')).Replace(' ', '-');
+            var level = heading.Groups["hashes"].Length;
             if (seen.TryGetValue(slug, out var count))
             {
                 seen[slug] = count + 1;
-                anchors.Add($"{slug}-{count + 1}");
+                headings.Add(new Heading(level, text, $"{slug}-{count + 1}"));
             }
             else
             {
                 seen[slug] = 0;
-                anchors.Add(slug);
+                headings.Add(new Heading(level, text, slug));
             }
         }
 
-        return anchors;
+        return headings;
     }
 
     [GeneratedRegex(@"\[(?<text>[^\]]*)\]\((?<target>[^)\s]+)\)")]
     private static partial Regex LinkRegex();
 
-    [GeneratedRegex(@"^#{1,6} (?<text>.+)$")]
+    [GeneratedRegex(@"^(?<hashes>#{1,6}) (?<text>.+)$")]
     private static partial Regex HeadingRegex();
 
+    [GeneratedRegex(@"^(?<indent>(  )*)- \[(?<text>[^\]]+)\]\(#(?<slug>[^)\s]+)\)$")]
+    private static partial Regex ContentsEntryRegex();
+
     private sealed record Link(int Line, string Target);
+
+    private sealed record Heading(int Level, string Text, string Slug);
 }
