@@ -45,7 +45,6 @@ internal static class SchemaSnippets
     internal static readonly IReadOnlyDictionary<int, string> FlywayFiles = new Dictionary<int, string>
     {
         [1] = "V42__sales_outbox_create_outbox.sql",
-        [2] = "V43__sales_outbox_drop_destination_columns.sql",
     };
     #endregion
 

@@ -12,7 +12,7 @@ public static partial class PostgreSqlOutboxSchema
     /// Gets the highest script number this package ships. A property, not a constant, so the value is read from the
     /// package at run time and not compiled into the caller.
     /// </summary>
-    public static int Version { get; } = 2;
+    public static int Version { get; } = 1;
 
     private const string ResourcePrefix = "Pernix.OutboxRelay.Client.PostgreSql.Sql.";
     private const int MaxIdentifierBytes = 63;
@@ -157,7 +157,7 @@ public static partial class PostgreSqlOutboxSchema
 
     private static bool IsIdentifierChar(char c) => char.IsAsciiLetterOrDigit(c) || c == '_' || c == '$';
 
-    // Table token "outbox", or name token "outbox_" before a lowercase letter (group "name"). "source_outbox" never matches.
+    // Table token "outbox", or name token "outbox_" before a lowercase letter (group "name"). "x_outbox" never matches.
     [GeneratedRegex(@"(?<![A-Za-z0-9_$])outbox(?:(?<name>_)(?=[a-z])|(?![A-Za-z0-9_$]))", RegexOptions.CultureInvariant)]
     private static partial Regex TokenRegex();
 

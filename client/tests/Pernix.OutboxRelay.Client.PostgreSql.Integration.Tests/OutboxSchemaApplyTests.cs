@@ -43,7 +43,6 @@ public sealed class OutboxSchemaApplyTests(PostgreSqlFixture postgres)
         await PostgreSqlFixture.ApplyScriptsAsync(connectionString, first);
         await PostgreSqlFixture.ApplyScriptsAsync(connectionString, second, "orders");
 
-        // V002 drops <prefix>_source_complete and <prefix>_source_uq with their columns, keeps the rest.
         Assert.Equal(
             ["outbox_header_values_are_strings", "outbox_headers_is_object", "outbox_retry_count_non_negative", "outbox_route_format"],
             await CheckConstraintsAsync(connectionString, first));
@@ -76,7 +75,7 @@ public sealed class OutboxSchemaApplyTests(PostgreSqlFixture postgres)
     [Theory]
     [InlineData("INSERT INTO {0} (message_key, payload) VALUES ('\\x6b'::bytea, '\\x70'::bytea)")]
     [InlineData("INSERT INTO {0} (message_key, payload, headers) VALUES ('\\x6b'::bytea, '\\x70'::bytea, '{{\"a\": \"b\"}}'::jsonb)")]
-    public async Task Insert_naming_only_the_1_0_0_columns_leaves_route_null(string insert)
+    public async Task Insert_without_route_leaves_route_null(string insert)
     {
         var table = await postgres.CreateOutboxAsync();
 

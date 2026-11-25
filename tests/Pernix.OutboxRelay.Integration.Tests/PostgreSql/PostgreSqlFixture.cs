@@ -27,13 +27,6 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         await ExecuteAsync(connectionString, $"CREATE SCHEMA {quoted}; SET search_path TO {quoted};\n{script}");
     }
 
-    // V002 on a schema created by CreateOutboxSchemaAsync: the second table shape the relay accepts.
-    public async Task ApplyV002Async(string schema)
-    {
-        var script = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Sql", "V002__drop_destination_columns.sql"));
-        await ExecuteAsync(ConnectionString, $"SET search_path TO {Quote(schema)};\n{script}");
-    }
-
     public async Task<string> CreateOutboxAsync()
     {
         var schema = NewSchema();

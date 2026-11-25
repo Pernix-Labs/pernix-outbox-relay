@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-08
 **Deciders:** Apostolos Stephanou
+**Superseded in part by:** [0014](./0014-clean-slate-schema-and-client-1-0-0.md) (client 1.0.0 and 2.0.0 references).
 
 ## Context
 

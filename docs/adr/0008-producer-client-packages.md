@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-07
 **Deciders:** Apostolos Stephanou
+**Superseded in part by:** [0014](./0014-clean-slate-schema-and-client-1-0-0.md) (client 1.1.0 framing of the route amendment, Follow-up 2026-11-11 V002).
 
 ## Context
 

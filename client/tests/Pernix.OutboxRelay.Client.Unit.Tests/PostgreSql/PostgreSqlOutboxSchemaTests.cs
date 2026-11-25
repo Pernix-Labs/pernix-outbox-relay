@@ -73,7 +73,7 @@ public sealed partial class PostgreSqlOutboxSchemaTests
     }
 
     [Fact]
-    public void Render_with_schema_table_and_prefix_leaves_no_outbox_identifier_except_source_outbox()
+    public void Render_with_schema_table_and_prefix_leaves_no_outbox_identifier()
     {
         foreach (var script in PostgreSqlOutboxSchema.Scripts(OutboxTable.Parse("s.t"), "p"))
         {
@@ -81,12 +81,10 @@ public sealed partial class PostgreSqlOutboxSchemaTests
         }
 
         var v001 = PostgreSqlOutboxSchema.Scripts(OutboxTable.Parse("s.t"), "p")[0].Sql;
-        Assert.Contains("source_outbox", v001, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE s.t (", v001, StringComparison.Ordinal);
         Assert.Contains("ALTER TABLE s.t SET", v001, StringComparison.Ordinal);
-        Assert.Equal(3, Count(v001, " ON s.t ("));
+        Assert.Equal(2, Count(v001, " ON s.t ("));
         Assert.Contains("CONSTRAINT p_header_values_are_strings ", v001, StringComparison.Ordinal);
-        Assert.Contains("CREATE UNIQUE INDEX p_source_uq ON", v001, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -106,7 +104,7 @@ public sealed partial class PostgreSqlOutboxSchemaTests
 
         Assert.Contains("CREATE TABLE risk.outbox_x (", sql, StringComparison.Ordinal);
         Assert.Contains("ALTER TABLE risk.outbox_x SET", sql, StringComparison.Ordinal);
-        Assert.Equal(3, Count(sql, " ON risk.outbox_x ("));
+        Assert.Equal(2, Count(sql, " ON risk.outbox_x ("));
         Assert.Contains("CONSTRAINT outbox_x_header_values_are_strings ", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("outbox_x_x", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("risk.risk", sql, StringComparison.Ordinal);
@@ -172,26 +170,25 @@ public sealed partial class PostgreSqlOutboxSchemaTests
     }
 
     [Fact]
-    public void Version_is_2_and_scripts_return_v001_then_v002()
+    public void Version_is_1_and_scripts_return_v001_only()
     {
         var scripts = PostgreSqlOutboxSchema.Scripts(OutboxTable.Parse("outbox"));
 
-        Assert.Equal(2, PostgreSqlOutboxSchema.Version);
-        Assert.Equal(["V001__create_outbox", "V002__drop_destination_columns"], scripts.Select(s => s.Name));
+        Assert.Equal(1, PostgreSqlOutboxSchema.Version);
+        Assert.Equal(["V001__create_outbox"], scripts.Select(s => s.Name));
     }
 
     [Fact]
-    public void Rendered_v002_alters_the_table_and_drops_the_six_columns_without_a_prefix_name()
+    public void Rendered_v001_has_exactly_the_outbox_columns()
     {
-        var sql = PostgreSqlOutboxSchema.Scripts(OutboxTable.Parse("s.t"), "pfx")[1].Sql;
+        var sql = PostgreSqlOutboxSchema.Scripts(OutboxTable.Parse("outbox"))[0].Sql.ReplaceLineEndings("\n");
+        var columns = sql.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && char.IsAsciiLetterLower(line[0]))
+            .Select(line => line[..line.IndexOf(' ')])
+            .ToArray();
 
-        Assert.StartsWith("ALTER TABLE s.t\n", sql.ReplaceLineEndings("\n"), StringComparison.Ordinal);
-        Assert.DoesNotContain("pfx", sql, StringComparison.Ordinal);
-        Assert.Equal(6, Count(sql, "DROP COLUMN IF EXISTS "));
-        foreach (var column in new[] { "source_outbox", "source_id", "source_destination", "dead_lettered_at", "dead_letter_reason", "dead_letter_attempts" })
-        {
-            Assert.Contains($"DROP COLUMN IF EXISTS {column}", sql, StringComparison.Ordinal);
-        }
+        Assert.Equal(OutboxColumns.All, columns);
     }
 
     [Fact]

@@ -5,6 +5,7 @@
 **Deciders:** Apostolos Stephanou
 **Related specs:** [2026-11-23-cicd-adoption](../specs/2026-11-23-cicd-adoption/)
 **Supersedes:** in [0008](./0008-producer-client-packages.md), the clause that client packages are "versioned in lockstep by one `VersionPrefix`" and the Follow-up 2026-11-08 publish workflows to GitHub Packages. In [0011](./0011-relay-config-section-and-hosting-package.md), D7 bullets 3 and 4 (`VersionPrefix` from `.version`, `client/PackageVersion.props`, publish job as follow-up). The rest of 0008 and 0011 stands.
+**Superseded in part by:** [0014](./0014-clean-slate-schema-and-client-1-0-0.md) (D6: first client tag is `client/v1.0.0`).
 
 ## Context
 

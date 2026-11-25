@@ -29,20 +29,6 @@ public sealed class PostgreSqlOutboxStoreTests(PostgreSqlFixture postgres)
     }
 
     [Fact]
-    public async Task V001_plus_V002_table_validates()
-    {
-        var schema = PostgreSqlFixture.NewSchema();
-        await postgres.CreateOutboxSchemaAsync(schema);
-        await postgres.ApplyV002Async(schema);
-        var provider = Provider(("Db", postgres.ConnectionString));
-
-        var validated = await provider.CreateStore(Outbox("Orders", "Db", $"{schema}.outbox")).ValidateAsync(Ct);
-
-        await using var session = await validated.OpenSessionAsync(Ct);
-        Assert.True(await session.TryLockAsync(Ct));
-    }
-
-    [Fact]
     public void Store_keeps_no_mutable_table_state()
     {
         var fields = typeof(PostgreSqlOutboxStore).GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
