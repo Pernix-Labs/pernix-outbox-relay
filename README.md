@@ -290,6 +290,22 @@ The excerpt leaves out the connection string, retry, dead-letter and failure-pol
 
 ### Run the image
 
+A minimal Dockerfile copies the config file into the image. To mount it at run time instead, use the `docker run` at the [top of this page](#pernix-outbox-relay).
+
+```dockerfile
+FROM ghcr.io/pernix-labs/pernix-outbox-relay:<version>
+COPY appsettings.json /app/appsettings.Production.json
+```
+
+The connection string is a secret, so pass it as an environment variable at run time and keep it out of the image:
+
+```shell
+docker build -t my-relay .
+docker run \
+  -e OutboxRelay__ConnectionStrings__RiskDb="Host=risk-db;Database=risk;Username=outbox_relay;Password=<secret>" \
+  my-relay
+```
+
 - **Configuration.** appsettings (mounted as `/app/appsettings.Production.json`) or the same settings as environment variables. All sources load once at startup: a change needs a restart.
 - **Database.** The relay role needs `SELECT, UPDATE, DELETE` on the outbox table, plus `pg_monitor` for the `outbox.gate_lag` gauge. Connect directly to the primary endpoint: no RDS Proxy, no PgBouncer transaction pooling, because leadership uses session advisory locks. [Database prerequisites](docs/runbook.md#3-database-prerequisites).
 - **Kafka.** Topics exist before the first start. The dead-letter topic is not compacted. `PLAINTEXT` only. [Kafka](docs/configuration.md#kafka).

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Core.Configuration;
 using Pernix.OutboxRelay.Destination.Kafka;
@@ -51,6 +52,21 @@ public sealed class ReadmeConfigExampleTests
     public void Readme_passes_the_connection_string_as_the_matching_environment_variable()
     {
         Assert.Contains("-e OutboxRelay__ConnectionStrings__" + ConnectionName + "=", ReadReadme(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Readme_Dockerfile_uses_the_same_image_and_config_path_as_the_docker_run_mount()
+    {
+        var readme = ReadReadme();
+        var mount = Regex.Match(readme, @"-v ""\$PWD/appsettings\.json:(?<target>/\S+?)(:ro)?""");
+        var image = Regex.Match(readme, @"^  (?<image>ghcr\.io/\S+)$", RegexOptions.Multiline);
+        var dockerfile = Regex.Match(readme, @"```dockerfile\nFROM (?<image>\S+)\nCOPY appsettings\.json (?<target>\S+)\n```");
+
+        Assert.True(mount.Success, "README.md: docker run -v mount of appsettings.json not found.");
+        Assert.True(image.Success, "README.md: docker run image line not found.");
+        Assert.True(dockerfile.Success, "README.md: dockerfile block with FROM and COPY appsettings.json not found.");
+        Assert.Equal(image.Groups["image"].Value, dockerfile.Groups["image"].Value);
+        Assert.Equal(mount.Groups["target"].Value, dockerfile.Groups["target"].Value);
     }
 
     private static string ReadReadme() => File.ReadAllText(ReadmePath).ReplaceLineEndings("\n");
