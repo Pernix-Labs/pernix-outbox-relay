@@ -17,7 +17,9 @@ public sealed class UpdateRuleSetHandler(IUnitOfWork unitOfWork, IRuleSetReposit
         var ruleSet = await ruleSets.GetAsync(ruleSetId, ct);
         ruleSet.Definition = definition;
 
-        var headers = OutboxHeaders.CreateBuilder(1).Add("idempotency-key", eventId.ToString()).Build();
+        var headers = OutboxHeaders.CreateBuilder(1)
+            .Add("idempotency-key", eventId.ToString())
+            .Build();
         var changed = new RuleSetChanged(eventId, ruleSetId);
         outbox.Enqueue(OutboxMessage.Json(ruleSetId.ToString(), changed, RiskJson.Default.RuleSetChanged, headers));
 
@@ -137,9 +139,12 @@ if (updated != 1)
     return;
 }
 
-var headers = OutboxHeaders.CreateBuilder(1).Add("idempotency-key", eventId.ToString()).Build();
+var headers = OutboxHeaders.CreateBuilder(1)
+    .Add("idempotency-key", eventId.ToString())
+    .Build();
 var changed = new RuleSetChanged(eventId, ruleSet.Id);
-var message = OutboxMessage.Json(ruleSet.Id.ToString(), changed, RiskJson.Default.RuleSetChanged, headers);
+var payload = MessagePackSerializer.Serialize(changed, ContractlessStandardResolver.Options, ct);
+var message = OutboxMessage.Create(ruleSet.Id.ToString(), payload, headers);
 
 // Outbox row last, on the same transaction.
 await publisher.PublishAsync(transaction, message, ct);
@@ -161,7 +166,9 @@ using Pernix.OutboxRelay.Destination.Kafka;
 
 <!-- snippet: readme-embed-register -->
 ```csharp
-builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination();
+builder.AddOutboxRelay()
+    .AddPostgreSqlOutbox()
+    .AddKafkaDestination();
 
 var app = builder.Build();
 app.MapOutboxRelayHealth();   // optional: /livez and /readyz
@@ -193,18 +200,36 @@ Image and embedded relay read the same `OutboxRelay` configuration section, from
 {
   "OutboxRelay": {
     "KafkaClusters": {
-      "Main": { "BootstrapServers": "b-1.msk:9092,b-2.msk:9092" }
+      "Main": {
+        "BootstrapServers": "b-1.msk:9092,b-2.msk:9092"
+      }
     },
     "Destinations": [
-      { "Name": "Snapshots", "Transport": "Kafka", "Kafka": { "Cluster": "Main", "Topic": "riskbackoffice.snapshots" } }
+      {
+        "Name": "Snapshots",
+        "Transport": "Kafka",
+        "Kafka": {
+          "Cluster": "Main",
+          "Topic": "riskbackoffice.snapshots"
+        }
+      }
     ],
     "Outboxes": [
       {
         "Name": "ConfigSnapshots",
         "Destination": "Snapshots",
-        "Database": { "Provider": "PostgreSql", "Connection": "Main", "Table": "public.outbox" },
-        "Polling": { "Interval": "00:00:01", "BatchSize": 500 },
-        "Ordering": { "Mode": "PerKey" }
+        "Database": {
+          "Provider": "PostgreSql",
+          "Connection": "Main",
+          "Table": "public.outbox"
+        },
+        "Polling": {
+          "Interval": "00:00:01",
+          "BatchSize": 500
+        },
+        "Ordering": {
+          "Mode": "PerKey"
+        }
       }
     ]
   }
