@@ -1,0 +1,4 @@
+# Fake test passwords in the import commit (sentinel and wrong-password test fixtures), not credentials.
+771a9470a0e34b9120d48dacf29851c1c8fb0169:tests/Pernix.OutboxRelay.Integration.Tests/PostgreSql/PostgreSqlOutboxStoreTests.cs:generic-api-key:399
+771a9470a0e34b9120d48dacf29851c1c8fb0169:tests/Pernix.OutboxRelay.Unit.Tests/Configuration/RelayStartupValidatorTests.cs:generic-api-key:14
+771a9470a0e34b9120d48dacf29851c1c8fb0169:tests/Pernix.OutboxRelay.Unit.Tests/Leadership/OutboxWorkerTests.cs:generic-api-key:12
