@@ -87,6 +87,23 @@ Business write and outbox row commit together → the relay leader polls the tab
 
 ![Flow](docs/flow.svg)
 
+## Contents
+
+- [Why](#why)
+- [Packages & installation](#packages--installation)
+- [Quick start](#quick-start)
+  - [1. Create the outbox table](#1-create-the-outbox-table)
+  - [2. Register](#2-register)
+  - [3. Publish](#3-publish)
+  - [4. Run the relay](#4-run-the-relay)
+- [How it works](#how-it-works)
+- [Configuration](#configuration)
+  - [Run the image](#run-the-image)
+- [Performance](#performance)
+- [Documentation](#documentation)
+- [Development](#development)
+- [License](#license)
+
 ## Why
 
 A service that changes its database and then publishes an event loses the event when the publish fails after the commit. Publishing first is no better: the event goes out and the transaction rolls back.
