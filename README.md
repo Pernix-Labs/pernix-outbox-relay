@@ -8,6 +8,56 @@ Outbox Relay is a transactional outbox for .NET and PostgreSQL. The producer ins
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20client%20%7C%2010.0%20relay-purple.svg)](https://dotnet.microsoft.com/)
 
+The relay runs from configuration alone. One outbox table to one Kafka topic:
+
+<!-- config: readme-minimal -->
+```json
+{
+  "OutboxRelay": {
+    "KafkaClusters": {
+      "Main": {
+        "BootstrapServers": "kafka:9092"
+      }
+    },
+    "Destinations": [
+      {
+        "Name": "RiskEvents",
+        "Transport": "Kafka",
+        "Kafka": {
+          "Cluster": "Main",
+          "Topic": "risk.events"
+        }
+      }
+    ],
+    "Outboxes": [
+      {
+        "Name": "Risk",
+        "Destination": "RiskEvents",
+        "Database": {
+          "Provider": "PostgreSql",
+          "Connection": "RiskDb",
+          "Table": "risk.outbox"
+        },
+        "Ordering": {
+          "Mode": "PerKey"
+        }
+      }
+    ]
+  }
+}
+```
+
+Mount the file into the image and pass the connection string as an environment variable:
+
+```shell
+docker run \
+  -v "$PWD/appsettings.json:/app/appsettings.Production.json:ro" \
+  -e OutboxRelay__ConnectionStrings__RiskDb="Host=risk-db;Database=risk;Username=outbox_relay;Password=<secret>" \
+  ghcr.io/pernix-labs/pernix-outbox-relay:<version>
+```
+
+The producer enqueues the event in the same EF Core transaction as the business change:
+
 <!-- snippet: readme-ef-uow-handler -->
 ```csharp
 public sealed class UpdateRuleSetHandler(IUnitOfWork unitOfWork, IRuleSetRepository ruleSets, IOutboxQueue<RiskDb> outbox)
