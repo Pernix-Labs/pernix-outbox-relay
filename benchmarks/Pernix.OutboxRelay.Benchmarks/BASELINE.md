@@ -658,3 +658,364 @@ Heap over time, after full GC, first / last / max (KB):
 - Guard `Churn`: 0 relay backends at every quarter of every run, both sides.
 
 Allocation guard: the 6 guard `term` kafka and dlq ceilings re-set on `835b04a` over 5 runs, limit = median + margin: None kafka 1,038.4 → 260.9 B/msg, None dlq 2,343.7 → 1,010.7 B/dlq-msg, PerKey kafka 905.6 → 210.8 B/msg, PerKey dlq 2,311.9 → 1,022.8 B/dlq-msg, Strict kafka 968.4 → 273.2 B/msg, Strict dlq 2,385.2 → 1,091.6 B/dlq-msg. The other 18 ceilings are unchanged from `85e6bf6`. Ceilings: `tests/Pernix.OutboxRelay.Unit.Tests/Allocation/AllocationCeilings.cs`.
+
+## 2026-11-24 — Re-measure on main
+
+Full harness run on `main` after the embeddable relay, the provider package split and the CI/CD change (#2, #3, #4). No product change is measured here: this section records where `main` stands and compares it with the initial baseline.
+
+### Method
+
+| Item | Value |
+|---|---|
+| Product commit | `ecc4861` (`main`) |
+| Harness commit | `ecc4861` |
+| Date | 2026-11-24, runs 19:30-20:31 UTC |
+| Machine | Apple M6, 12 cores (12 logical / 12 physical), 32 GB RAM, macOS 27.2.1 (26B131), arm64. Not the machine of the sections above (Apple M5, 10 cores, 24 GB) |
+| .NET | runtime 10.0.15 (Microsoft.NETCore.App 10.0.15), SDK 10.0.404, Release build |
+| GC mode | workstation, non-concurrent (header: `gcServer=False latency=Batch`; BDN job `Concurrent=False Server=False`) |
+| PostgreSQL | Testcontainers `postgres:17.11` (header `pg=testcontainers postgres:17.11`), Docker 29.9.3 |
+| Kafka | `Nanov.Kafka` `[2.16.0.3]` for sends, Confluent.Kafka 2.16.0 / librdkafka 2.16.0, librdkafka mock cluster |
+| BenchmarkDotNet | 0.15.8, `[MemoryDiagnoser]`, default out-of-process toolchain |
+| Other | `otel=False profile=False runtimeEvents=off` on every reported run. **The machine was not idle.** Other workloads ran on it during the runs: 1-minute load average 9.4 at the start of run 1, 5.9 at the start of run 2, 90.5 at the start of run 3, 10.0 at the start of BDN and 75.6 at its end. See the first note |
+
+Commands (repo root, run in this order, one process each):
+
+```sh
+dotnet build -c Release benchmarks/Pernix.OutboxRelay.Benchmarks
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- all   # run 1
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- all   # run 2
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- all   # run 3
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- bdn --filter '*'
+```
+
+`all` runs: 16 min 14 s, 18 min 11 s, 16 min 43 s. `bdn --filter '*'`: 24 cases, 9 min 41 s. Every process exited 0.
+
+### BDN
+
+`Allocated` per operation as BDN reports it. Mean is context only, and in this run it is distorted by the load on the machine (for example `Read1` None: mean 1,302 us, median 274 us).
+
+#### Session (`SessionBenchmarks`)
+
+`Read500` and `Commit100` per row, other methods per call.
+
+| Method | Mode | Mean | Allocated |
+|---|---|---:|---:|
+| Read500 | None | 6.770 us | 299 B |
+| Read1 | None | 1,302.106 us | 1,607 B |
+| ReadEmpty | None | 233.449 us | 1,421 B |
+| Commit100 | None | 3.890 us | 24 B |
+| Commit1 | None | 137.524 us | 1,670 B |
+| Check | None | 150.454 us | 1,702 B |
+| Summary | None | 168.839 us | 1,588 B |
+| Read500 | PerKey | 1.174 us | 299 B |
+| Read1 | PerKey | 175.036 us | 1,760 B |
+| ReadEmpty | PerKey | 108.732 us | 1,436 B |
+| Commit100 | PerKey | 2.325 us | 25 B |
+| Commit1 | PerKey | 141.432 us | 1,671 B |
+| Check | PerKey | 122.513 us | 1,705 B |
+| Summary | PerKey | 152.268 us | 1,592 B |
+
+#### Kafka send (`KafkaSendBenchmarks`)
+
+Per message, 500 sends then 500 awaits per invocation. BDN prints `-` for these rows, shown here as 0 B.
+
+| Method | Headers | Mean | Allocated |
+|---|---|---:|---:|
+| Send | 0 | 12.81 us | 0 B |
+| Send | 1 | 17.29 us | 0 B |
+| Send | 4 | 14.89 us | 0 B |
+
+#### DeliveryTerm (`DeliveryTermBenchmarks`)
+
+Per delivered message.
+
+| Method | Mode | Destination | Mean | Allocated |
+|---|---|---|---:|---:|
+| Deliver | None | Null | 1.226 us | 193 B |
+| Deliver | None | Kafka | 3.716 us | 220 B |
+| Deliver | PerKey | Null | 1.232 us | 193 B |
+| Deliver | PerKey | Kafka | 64.157 us | 194 B |
+
+#### HeadersParser (`HeadersParserBenchmarks`)
+
+Per parse.
+
+| Method | Case | Mean | Allocated |
+|---|---|---:|---:|
+| Parse | One | 59.29 ns | 96 B |
+| Parse | Three | 258.69 ns | 248 B |
+| Parse | Escaped | 103.52 ns | 152 B |
+
+### GC-delta
+
+Each cell: the `reported` round (round 3 of 3, after warm-up) of runs 1-3, median, spread = max − min. Gen0/1/2 per 100k units and rate are medians of the same rounds. Rates are context only and were measured under load.
+
+#### Kafka-only (`kafka`, B/msg)
+
+| Cell | run 1 | run 2 | run 3 | median | spread | Gen0/1/2 per 100k (median) | rate/s (median) |
+|---|---:|---:|---:|---:|---:|---|---:|
+| kafka-only None w500 h0 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 84,510 |
+| kafka-only None w500 h1 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 83,424 |
+| kafka-only None w500 h4 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 84,126 |
+| kafka-only PerKey w500 h0 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 82,418 |
+| kafka-only PerKey w500 h1 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 81,446 |
+| kafka-only PerKey w500 h4 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 82,040 |
+| kafka-only Strict w1 h0 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 31,216 |
+| kafka-only Strict w1 h1 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 29,775 |
+| kafka-only Strict w1 h4 | 0.0 | 0.0 | 0.0 | **0.0** | 0.0 | 0 / 0 / 0 | 24,510 |
+
+#### Kafka dead-letter only (`kafka-dlq`, B/dlq-msg)
+
+| Cell | run 1 | run 2 | run 3 | median | spread | Gen0/1/2 per 100k (median) | rate/s (median) |
+|---|---:|---:|---:|---:|---:|---|---:|
+| kafka-dlq None w500 h0 | 304.0 | 304.0 | 304.0 | **304.0** | 0.0 | 3 / 0 / 0 | 82,884 |
+| kafka-dlq None w500 h1 | 320.0 | 320.0 | 320.0 | **320.0** | 0.0 | 3.5 / 0 / 0 | 82,134 |
+| kafka-dlq None w500 h4 | 368.0 | 368.0 | 368.0 | **368.0** | 0.0 | 3.5 / 0 / 0 | 81,467 |
+| kafka-dlq PerKey w500 h0 | 304.0 | 304.0 | 304.0 | **304.0** | 0.0 | 2.5 / 0 / 0 | 84,032 |
+| kafka-dlq PerKey w500 h1 | 320.0 | 320.0 | 320.0 | **320.0** | 0.0 | 3 / 0 / 0 | 76,435 |
+| kafka-dlq PerKey w500 h4 | 368.0 | 368.0 | 368.0 | **368.0** | 0.0 | 3.5 / 0 / 0 | 76,361 |
+| kafka-dlq Strict w1 h0 | 304.0 | 304.0 | 304.0 | **304.0** | 0.0 | 5 / 0 / 0 | 25,936 |
+| kafka-dlq Strict w1 h1 | 320.0 | 320.0 | 320.0 | **320.0** | 0.0 | 5 / 0 / 0 | 31,820 |
+| kafka-dlq Strict w1 h4 | 368.0 | 368.0 | 368.0 | **368.0** | 0.0 | 0 / 0 / 0 | 30,358 |
+
+#### Steady term, null / Kafka / dead-letter (`term`)
+
+| Cell | run 1 | run 2 | run 3 | median | spread | Gen0/1/2 per 100k (median) | rate/s (median) |
+|---|---:|---:|---:|---:|---:|---|---:|
+| term None null b500 h1 (B/msg) | 192.8 | 192.8 | 192.8 | **192.8** | 0.0 | 0 / 0 / 0 | 2,393,968 |
+| term None kafka b500 h1 (B/msg) | 201.6 | 207.6 | 200.4 | **201.6** | 7.2 | 0.5 / 0.5 / 0.5 | 644,474 |
+| term None dlq b500 h1 (B/dlq-msg) | 895.4 | 895.5 | 884.8 | **895.4** | 10.7 | 2 / 0 / 0 | 511,855 |
+| term PerKey null b500 h1 (B/msg) | 192.9 | 192.9 | 192.9 | **192.9** | 0.0 | 0 / 0 / 0 | 3,716,983 |
+| term PerKey kafka b500 h1 (B/msg) | 191.6 | 191.6 | 191.6 | **191.6** | 0.0 | 2 / 0 / 0 | 16,834 |
+| term PerKey dlq b500 h1 (B/dlq-msg) | 928.7 | 930.3 | 930.4 | **930.3** | 1.7 | 4 / 0 / 0 | 16,604 |
+| term Strict null b500 h1 (B/msg) | 192.9 | 192.9 | 192.9 | **192.9** | 0.0 | 0 / 0 / 0 | 6,281,160 |
+| term Strict kafka b500 h1 (B/msg) | 248.2 | 248.4 | 248.3 | **248.3** | 0.2 | 5 / 0 / 0 | 18,219 |
+| term Strict dlq b500 h1 (B/dlq-msg) | 992.2 | 992.0 | 992.4 | **992.2** | 0.4 | 5 / 5 / 5 | 19,741 |
+
+#### Idle (`idle`, B/s)
+
+| Cell | run 1 | run 2 | run 3 | median | spread | Gen0/1/2 per 100k (median) | rate/s (median) |
+|---|---:|---:|---:|---:|---:|---|---:|
+| idle None null interval 1s | 93.3 | 56.0 | 57.1 | **57.1** | 37.3 | 0 / 0 / 0 | 1 |
+| idle None kafka interval 1s | 85.3 | 95.2 | 130.9 | **95.2** | 45.6 | 0 / 0 / 0 | 1 |
+| idle PerKey null interval 1s | 86.9 | 56.0 | 132.0 | **86.9** | 76.0 | 0 / 0 / 0 | 1 |
+| idle PerKey kafka interval 1s | 177.1 | 97.1 | 132.0 | **132.0** | 80.0 | 0 / 0 / 0 | 1 |
+| idle Strict null interval 1s | 96.5 | 183.2 | 56.0 | **96.5** | 127.2 | 0 / 0 / 0 | 1 |
+| idle Strict kafka interval 1s | 140.5 | 99.2 | 96.3 | **99.2** | 44.2 | 0 / 0 / 0 | 1 |
+
+#### Steady session (`session`, B/row, read + commit)
+
+| Cell | run 1 | run 2 | run 3 | median | spread | read median | commit median | Gen0/1/2 per 100k (median) | rate/s (median) |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| session None batch 500 h1 | 319.4 | 320.1 | 319.5 | **319.5** | 0.7 | 299 | 21 | 1 / 0 / 0 | 172,666 |
+| session None batch 500 h3 | 471.6 | 471.5 | 471.7 | **471.6** | 0.2 | 451 | 21 | 1 / 1 / 1 | 160,747 |
+| session None batch 100 h1 | 327.9 | 327.8 | 328.0 | **327.9** | 0.2 | 307 | 21 | 1 / 1 / 0 | 80,382 |
+| session None batch 100 h3 | 480.0 | 480.0 | 480.0 | **480.0** | 0.0 | 459 | 21 | 1 / 0 / 0 | 96,956 |
+| session None batch 10 h1 | 541.3 | 541.3 | 542.2 | **541.3** | 0.9 | 405 | 136 | 10 / 10 / 0 | 15,013 |
+| session None batch 10 h3 | 692.8 | 692.7 | 693.3 | **692.8** | 0.6 | 557 | 136 | 10 / 0 / 0 | 16,237 |
+| session None batch 1 h1 | 2,678.0 | 2,678.9 | 2,678.7 | **2,678.7** | 0.9 | 1,384 | 1,294 | 20 / 0 / 0 | 1,668 |
+| session None batch 1 h3 | 2,831.4 | 2,829.7 | 2,830.9 | **2,830.9** | 1.7 | 1,536 | 1,295 | 20 / 0 / 0 | 1,515 |
+| session PerKey batch 500 h1 | 319.3 | 319.3 | 319.2 | **319.3** | 0.1 | 298 | 21 | 0 / 0 / 0 | 213,834 |
+| session PerKey batch 500 h3 | 471.2 | 471.2 | 471.2 | **471.2** | 0.0 | 450 | 21 | 1 / 0 / 0 | 178,276 |
+| session PerKey batch 100 h1 | 328.1 | 328.2 | 328.2 | **328.2** | 0.1 | 307 | 21 | 1 / 0 / 0 | 148,209 |
+| session PerKey batch 100 h3 | 480.1 | 480.1 | 480.2 | **480.1** | 0.1 | 459 | 21 | 2 / 0 / 0 | 132,603 |
+| session PerKey batch 10 h1 | 543.4 | 544.3 | 544.9 | **544.3** | 1.5 | 408 | 136 | 0 / 0 / 0 | 15,687 |
+| session PerKey batch 10 h3 | 696.4 | 697.0 | 695.7 | **696.4** | 1.3 | 560 | 136 | 10 / 0 / 0 | 17,869 |
+| session PerKey batch 1 h1 | 2,712.3 | 2,710.3 | 2,704.3 | **2,710.3** | 8.0 | 1,416 | 1,294 | 20 / 0 / 0 | 1,719 |
+| session PerKey batch 1 h3 | 2,871.9 | 2,872.3 | 2,872.1 | **2,872.1** | 0.4 | 1,576 | 1,296 | 20 / 0 / 0 | 1,638 |
+| session Strict batch 500 h1 | 319.8 | 319.7 | 319.8 | **319.8** | 0.1 | 299 | 21 | 0 / 0 / 0 | 179,987 |
+| session Strict batch 500 h3 | 471.8 | 471.7 | 472.5 | **471.8** | 0.8 | 451 | 21 | 1 / 0 / 0 | 200,013 |
+| session Strict batch 100 h1 | 328.4 | 328.4 | 328.5 | **328.4** | 0.1 | 308 | 21 | 1 / 0 / 0 | 156,180 |
+| session Strict batch 100 h3 | 480.7 | 480.7 | 480.8 | **480.7** | 0.1 | 460 | 21 | 2 / 0 / 0 | 148,619 |
+| session Strict batch 10 h1 | 545.7 | 546.0 | 545.6 | **545.7** | 0.4 | 409 | 137 | 10 / 0 / 0 | 19,628 |
+| session Strict batch 10 h3 | 695.9 | 697.2 | 697.6 | **697.2** | 1.7 | 561 | 136 | 0 / 0 / 0 | 18,275 |
+| session Strict batch 1 h1 | 2,715.2 | 2,720.1 | 2,719.6 | **2,719.6** | 4.9 | 1,424 | 1,295 | 20 / 0 / 0 | 1,697 |
+| session Strict batch 1 h3 | 2,872.1 | 2,829.1 | 2,871.7 | **2,871.7** | 43.0 | 1,576 | 1,296 | 20 / 0 / 0 | 1,725 |
+
+#### Fixed cost (`fixed`, B/call)
+
+| Cell | run 1 | run 2 | run 3 | median | spread | B/row median | Gen0/1/2 per 100k (median) | rate/s (median) |
+|---|---:|---:|---:|---:|---:|---:|---|---:|
+| None read 1 | 1,385.6 | 1,385.6 | 1,385.6 | **1,385.6** | 0.0 | 1,386 | 0 / 0 / 0 | 6,511 |
+| None read 10 | 4,049.6 | 4,049.6 | 4,049.6 | **4,049.6** | 0.0 | 405 | 0 / 0 / 0 | 5,064 |
+| None read 100 | 30,692.3 | 30,696.9 | 30,695.1 | **30,695.1** | 4.6 | 307 | 500 / 0 / 0 | 4,523 |
+| None read 500 | 149,283 | 149,186 | 149,220 | **149,220** | 96.9 | 298 | 1500 / 0 / 0 | 2,673 |
+| None read 1000 | 297,354 | 297,442 | 297,436 | **297,436** | 88.8 | 297 | 3000 / 0 / 0 | 1,698 |
+| None commit-remove 1 | 1,296.6 | 1,296.6 | 1,294.3 | **1,296.6** | 2.3 | – | 0 / 0 / 0 | 11,018 |
+| None commit-remove 10 | 1,368.6 | 1,368.6 | 1,363.9 | **1,368.6** | 4.7 | – | 0 / 0 / 0 | 10,467 |
+| None commit-remove 100 | 2,088.6 | 2,086.3 | 2,088.6 | **2,088.6** | 2.3 | – | 200 / 0 / 0 | 9,641 |
+| None commit-fail (tx) 10 | 2,580.4 | 2,576.9 | 2,582.3 | **2,580.4** | 5.4 | – | 0 / 0 / 0 | 4,901 |
+| None read 500 exclude 0 | 149,236 | 149,257 | 149,252 | **149,252** | 20.7 | 299 | 1000 / 0 / 0 | 2,573 |
+| None read 500 exclude 500 | 149,345 | 149,387 | 149,273 | **149,345** | 113.7 | 299 | 2000 / 0 / 0 | 2,261 |
+| None read 500 exclude 5000 | 149,505 | 149,438 | 149,541 | **149,505** | 103.1 | 299 | 1000 / 0 / 0 | 1,024 |
+| None read-empty | 1,064.3 | 1,064.3 | 1,063.5 | **1,064.3** | 0.8 | – | 0 / 0 / 0 | 4,222 |
+| None check | 1,328.3 | 1,327.1 | 1,328.3 | **1,328.3** | 1.2 | – | 0 / 0 / 0 | 7,618 |
+| None summary | 1,216.3 | 1,216.3 | 1,216.3 | **1,216.3** | 0.0 | – | 0 / 0 / 0 | 10,319 |
+| None stats | 5,435.2 | 5,432.4 | 5,428.6 | **5,432.4** | 6.6 | – | 100 / 0 / 0 | 2,553 |
+| PerKey read 1 | 1,385.6 | 1,385.6 | 1,385.6 | **1,385.6** | 0.0 | 1,386 | 0 / 0 / 0 | 4,189 |
+| PerKey read 10 | 4,049.6 | 4,032.6 | 4,049.6 | **4,049.6** | 17.0 | 405 | 0 / 0 / 0 | 5,068 |
+| PerKey read 100 | 30,689.6 | 30,691.4 | 30,689.6 | **30,689.6** | 1.8 | 307 | 500 / 0 / 0 | 3,676 |
+| PerKey read 500 | 149,123 | 149,121 | 149,142 | **149,123** | 20.7 | 298 | 1500 / 0 / 0 | 1,737 |
+| PerKey read 1000 | 297,203 | 297,143 | 297,174 | **297,174** | 60.0 | 297 | 3000 / 0 / 0 | 861 |
+| PerKey commit-remove 1 | 1,296.6 | 1,296.6 | 1,296.6 | **1,296.6** | 0.0 | – | 0 / 0 / 0 | 6,531 |
+| PerKey commit-remove 10 | 1,368.6 | 1,368.6 | 1,368.6 | **1,368.6** | 0.0 | – | 0 / 0 / 0 | 9,297 |
+| PerKey commit-remove 100 | 2,088.6 | 2,081.5 | 2,088.6 | **2,088.6** | 7.1 | – | 0 / 0 / 0 | 8,023 |
+| PerKey commit-fail (tx) 10 | 2,584.1 | 2,579.5 | 2,584.1 | **2,584.1** | 4.6 | – | 0 / 0 / 0 | 4,633 |
+| PerKey read-empty | 1,064.3 | 1,058.4 | 1,064.3 | **1,064.3** | 5.9 | – | 0 / 0 / 0 | 5,382 |
+| PerKey check | 1,328.3 | 1,302.4 | 1,328.3 | **1,328.3** | 25.9 | – | 0 / 0 / 0 | 8,685 |
+| PerKey summary | 1,216.3 | 1,209.0 | 1,216.3 | **1,216.3** | 7.3 | – | 0 / 0 / 0 | 8,977 |
+| PerKey stats | 5,930.8 | 5,857.8 | 5,930.8 | **5,930.8** | 73.0 | – | 100 / 0 / 0 | 2,196 |
+| Strict read 1 | 1,385.6 | 1,377.1 | 1,385.6 | **1,385.6** | 8.5 | 1,386 | 0 / 0 / 0 | 6,043 |
+| Strict read 10 | 4,049.6 | 4,019.9 | 4,049.6 | **4,049.6** | 29.7 | 405 | 0 / 0 / 0 | 4,719 |
+| Strict read 100 | 30,694.2 | 30,695.8 | 30,694.2 | **30,694.2** | 1.6 | 307 | 500 / 0 / 0 | 3,906 |
+| Strict read 500 | 149,239 | 149,259 | 149,217 | **149,239** | 42.6 | 298 | 1500 / 0 / 0 | 1,640 |
+| Strict read 1000 | 297,339 | 297,620 | 297,459 | **297,459** | 281.2 | 297 | 2500 / 0 / 0 | 1,499 |
+| Strict commit-remove 1 | 1,296.6 | 1,296.6 | 1,296.6 | **1,296.6** | 0.0 | – | 0 / 0 / 0 | 8,927 |
+| Strict commit-remove 10 | 1,368.6 | 1,368.6 | 1,368.6 | **1,368.6** | 0.0 | – | 0 / 0 / 0 | 8,657 |
+| Strict commit-remove 100 | 2,088.6 | 2,088.6 | 2,088.6 | **2,088.6** | 0.0 | – | 0 / 0 / 0 | 8,583 |
+| Strict commit-fail (tx) 10 | 2,586.0 | 2,586.9 | 2,588.7 | **2,586.9** | 2.7 | – | 0 / 0 / 0 | 4,167 |
+| Strict read-empty | 1,064.3 | 1,064.3 | 1,064.3 | **1,064.3** | 0.0 | – | 100 / 0 / 0 | 6,361 |
+| Strict check | 1,328.3 | 1,328.3 | 1,328.3 | **1,328.3** | 0.0 | – | 0 / 0 / 0 | 7,941 |
+| Strict summary | 1,216.3 | 1,216.3 | 1,216.3 | **1,216.3** | 0.0 | – | 0 / 0 / 0 | 8,837 |
+| Strict stats | 5,628.1 | 5,631.4 | 5,625.9 | **5,628.1** | 5.5 | – | 0 / 0 / 0 | 1,976 |
+
+### Heap over time and churn
+
+Heap after full GC, first / last / max (KB).
+
+| Scenario | Run 1 | Run 2 | Run 3 | Trend |
+|---|---|---|---|---|
+| flat term PerKey kafka b500 h1, 1M msgs, every 100k | 2,446 / 829 / 2,446 | 2,424 / 834 / 2,424 | 2,420 / 827 / 2,420 | flat, the 1M checkpoint drops, as before |
+| flat session None batch 500, 1M rows, every 100k | 4,588 / 4,573 / 4,588 | 4,484 / 4,470 / 4,484 | 4,495 / 4,471 / 4,495 | flat |
+
+`churn` (PerKey, 4,000 sessions, heap at 1,000 / 2,000 / 3,000 / 4,000, KB): run 1 4,561 / 4,563 / 4,737 / 4,563, run 2 4,497 / 4,839 / 4,940 / 5,060, run 3 4,477 / 4,480 / 4,480 / 4,458. 0 relay backends at every quarter of every run. Run 2 rises by 563 KB. `churn` heap is printed, not asserted, and earlier sections found such crossings to be GC heap space, not live objects (`## 2026-11-10 — PostgreSQL session`). No gcdump was taken in this run.
+
+### Delta vs the 2026-11-09 initial baseline
+
+before = initial baseline median (Apple M5, product commit `2671eb5`), after = this run's median. The two sides ran on different machines, runtimes (10.0.2 vs 10.0.15) and dates, not interleaved, so this table is a record and not a gate verdict. The changes come from the sections between the two: Kafka routes, core loop, PostgreSQL session, allocation guard (dead-letter header merge) and raw Kafka produce.
+
+| Cell | before | after | Δ |
+|---|---:|---:|---:|
+| kafka-only None w500 h0 (B/msg) | 800.0 | 0.0 | -800.0 |
+| kafka-only None w500 h1 (B/msg) | 1,104.0 | 0.0 | -1,104.0 |
+| kafka-only None w500 h4 (B/msg) | 1,696.0 | 0.0 | -1,696.0 |
+| kafka-only PerKey w500 h0 (B/msg) | 800.0 | 0.0 | -800.0 |
+| kafka-only PerKey w500 h1 (B/msg) | 1,104.0 | 0.0 | -1,104.0 |
+| kafka-only PerKey w500 h4 (B/msg) | 1,696.0 | 0.0 | -1,696.0 |
+| kafka-only Strict w1 h0 (B/msg) | 800.0 | 0.0 | -800.0 |
+| kafka-only Strict w1 h1 (B/msg) | 1,104.0 | 0.0 | -1,104.0 |
+| kafka-only Strict w1 h4 (B/msg) | 1,696.0 | 0.0 | -1,696.0 |
+| term None null b500 h1 (B/msg) | 192.8 | 192.8 | 0.0 |
+| term None kafka b500 h1 (B/msg) | 1,544.6 | 201.6 | -1,343.0 |
+| term None dlq b500 h1 (B/dlq-msg) | 3,683.8 | 895.4 | -2,788.4 |
+| term PerKey null b500 h1 (B/msg) | 244.1 | 192.9 | -51.2 |
+| term PerKey kafka b500 h1 (B/msg) | 1,566.4 | 191.6 | -1,374.8 |
+| term PerKey dlq b500 h1 (B/dlq-msg) | 3,849.4 | 930.3 | -2,919.1 |
+| term Strict null b500 h1 (B/msg) | 192.9 | 192.9 | 0.0 |
+| term Strict kafka b500 h1 (B/msg) | 2,505.2 | 248.3 | -2,256.9 |
+| term Strict dlq b500 h1 (B/dlq-msg) | 4,852.0 | 992.2 | -3,859.8 |
+| idle None null interval 1s (B/s) | 5,739.2 | 57.1 | -5,682.1 |
+| idle None kafka interval 1s (B/s) | 3,924.0 | 95.2 | -3,828.8 |
+| idle PerKey null interval 1s (B/s) | 2,531.5 | 86.9 | -2,444.6 |
+| idle PerKey kafka interval 1s (B/s) | 3,461.9 | 132.0 | -3,329.9 |
+| idle Strict null interval 1s (B/s) | 7,723.7 | 96.5 | -7,627.2 |
+| idle Strict kafka interval 1s (B/s) | 2,759.5 | 99.2 | -2,660.3 |
+| session None batch 500 h1 (B/row) | 597.7 | 319.5 | -278.2 |
+| session None batch 500 h3 (B/row) | 958.2 | 471.6 | -486.6 |
+| session None batch 100 h1 (B/row) | 631.2 | 327.9 | -303.3 |
+| session None batch 100 h3 (B/row) | 991.4 | 480.0 | -511.4 |
+| session None batch 10 h1 (B/row) | 1,154.0 | 541.3 | -612.7 |
+| session None batch 10 h3 (B/row) | 1,514.1 | 692.8 | -821.3 |
+| session None batch 1 h1 (B/row) | 6,329.0 | 2,678.7 | -3,650.3 |
+| session None batch 1 h3 (B/row) | 6,689.0 | 2,830.9 | -3,858.1 |
+| session PerKey batch 500 h1 (B/row) | 601.3 | 319.3 | -282.0 |
+| session PerKey batch 500 h3 (B/row) | 961.4 | 471.2 | -490.2 |
+| session PerKey batch 100 h1 (B/row) | 651.4 | 328.2 | -323.2 |
+| session PerKey batch 100 h3 (B/row) | 1,011.4 | 480.1 | -531.3 |
+| session PerKey batch 10 h1 (B/row) | 1,358.3 | 544.3 | -814.0 |
+| session PerKey batch 10 h3 (B/row) | 1,718.3 | 696.4 | -1,021.9 |
+| session PerKey batch 1 h1 (B/row) | 8,369.2 | 2,710.3 | -5,658.9 |
+| session PerKey batch 1 h3 (B/row) | 8,729.3 | 2,872.1 | -5,857.2 |
+| session Strict batch 500 h1 (B/row) | 600.0 | 319.8 | -280.2 |
+| session Strict batch 500 h3 (B/row) | 959.9 | 471.8 | -488.1 |
+| session Strict batch 100 h1 (B/row) | 638.6 | 328.4 | -310.2 |
+| session Strict batch 100 h3 (B/row) | 1,000.0 | 480.7 | -519.3 |
+| session Strict batch 10 h1 (B/row) | 1,227.7 | 545.7 | -682.0 |
+| session Strict batch 10 h3 (B/row) | 1,587.7 | 697.2 | -890.5 |
+| session Strict batch 1 h1 (B/row) | 7,065.1 | 2,719.6 | -4,345.5 |
+| session Strict batch 1 h3 (B/row) | 7,425.2 | 2,871.7 | -4,553.5 |
+| None read 1 (B/call) | 4,193.5 | 1,385.6 | -2,807.9 |
+| None read 10 (B/call) | 9,265.5 | 4,049.6 | -5,215.9 |
+| None read 100 (B/call) | 60,092.7 | 30,695.1 | -29,397.6 |
+| None read 500 (B/call) | 284,229 | 149,220 | -135,009 |
+| None read 1000 (B/call) | 564,670 | 297,436 | -267,234 |
+| None commit-remove 1 (B/call) | 2,128.6 | 1,296.6 | -832.0 |
+| None commit-remove 10 (B/call) | 2,200.6 | 1,368.6 | -832.0 |
+| None commit-remove 100 (B/call) | 2,921.1 | 2,088.6 | -832.5 |
+| None commit-fail (tx) 10 (B/call) | 5,211.5 | 2,580.4 | -2,631.1 |
+| None read 500 exclude 0 (B/call) | 284,251 | 149,252 | -134,999 |
+| None read 500 exclude 500 (B/call) | 284,328 | 149,345 | -134,983 |
+| None read 500 exclude 5000 (B/call) | 284,358 | 149,505 | -134,853 |
+| None read-empty (B/call) | 3,600.3 | 1,064.3 | -2,536.0 |
+| None check (B/call) | 2,832.3 | 1,328.3 | -1,504.0 |
+| None summary (B/call) | 1,752.3 | 1,216.3 | -536.0 |
+| None stats (B/call) | 5,428.3 | 5,432.4 | +4.1 |
+| PerKey read 1 (B/call) | 5,593.5 | 1,385.6 | -4,207.9 |
+| PerKey read 10 (B/call) | 10,665.5 | 4,049.6 | -6,615.9 |
+| PerKey read 100 (B/call) | 61,493.8 | 30,689.6 | -30,804.2 |
+| PerKey read 500 (B/call) | 285,354 | 149,123 | -136,231 |
+| PerKey read 1000 (B/call) | 565,605 | 297,174 | -268,431 |
+| PerKey commit-remove 1 (B/call) | 2,129.1 | 1,296.6 | -832.5 |
+| PerKey commit-remove 10 (B/call) | 2,200.6 | 1,368.6 | -832.0 |
+| PerKey commit-remove 100 (B/call) | 2,920.6 | 2,088.6 | -832.0 |
+| PerKey commit-fail (tx) 10 (B/call) | 5,218.8 | 2,584.1 | -2,634.7 |
+| PerKey read-empty (B/call) | 5,000.3 | 1,064.3 | -3,936.0 |
+| PerKey check (B/call) | 2,832.3 | 1,328.3 | -1,504.0 |
+| PerKey summary (B/call) | 1,752.3 | 1,216.3 | -536.0 |
+| PerKey stats (B/call) | 5,925.3 | 5,930.8 | +5.5 |
+| Strict read 1 (B/call) | 4,289.5 | 1,385.6 | -2,903.9 |
+| Strict read 10 (B/call) | 9,361.5 | 4,049.6 | -5,311.9 |
+| Strict read 100 (B/call) | 60,186.5 | 30,694.2 | -29,492.3 |
+| Strict read 500 (B/call) | 284,338 | 149,239 | -135,099 |
+| Strict read 1000 (B/call) | 564,815 | 297,459 | -267,356 |
+| Strict commit-remove 1 (B/call) | 2,128.6 | 1,296.6 | -832.0 |
+| Strict commit-remove 10 (B/call) | 2,200.6 | 1,368.6 | -832.0 |
+| Strict commit-remove 100 (B/call) | 2,920.6 | 2,088.6 | -832.0 |
+| Strict commit-fail (tx) 10 (B/call) | 5,216.3 | 2,586.9 | -2,629.4 |
+| Strict read-empty (B/call) | 3,696.3 | 1,064.3 | -2,632.0 |
+| Strict check (B/call) | 2,832.3 | 1,328.3 | -1,504.0 |
+| Strict summary (B/call) | 1,752.3 | 1,216.3 | -536.0 |
+| Strict stats (B/call) | 5,601.6 | 5,628.1 | +26.5 |
+| BDN SessionBenchmarks Read500 None (B/op) | 569 | 299 | -270 |
+| BDN SessionBenchmarks Read1 None (B/op) | 4,568 | 1,607 | -2,961 |
+| BDN SessionBenchmarks ReadEmpty None (B/op) | 3,976 | 1,421 | -2,555 |
+| BDN SessionBenchmarks Commit100 None (B/op) | 33 | 24 | -9 |
+| BDN SessionBenchmarks Commit1 None (B/op) | 2,502 | 1,670 | -832 |
+| BDN SessionBenchmarks Check None (B/op) | 3,104 | 1,702 | -1,402 |
+| BDN SessionBenchmarks Summary None (B/op) | 2,129 | 1,588 | -541 |
+| BDN SessionBenchmarks Read500 PerKey (B/op) | 571 | 299 | -272 |
+| BDN SessionBenchmarks Read1 PerKey (B/op) | 5,968 | 1,760 | -4,208 |
+| BDN SessionBenchmarks ReadEmpty PerKey (B/op) | 5,376 | 1,436 | -3,940 |
+| BDN SessionBenchmarks Commit100 PerKey (B/op) | 33 | 25 | -8 |
+| BDN SessionBenchmarks Commit1 PerKey (B/op) | 2,502 | 1,671 | -831 |
+| BDN SessionBenchmarks Check PerKey (B/op) | 3,208 | 1,705 | -1,503 |
+| BDN SessionBenchmarks Summary PerKey (B/op) | 2,127 | 1,592 | -535 |
+| BDN KafkaSendBenchmarks Send h0 (B/op) | 800 | 0 | -800 |
+| BDN KafkaSendBenchmarks Send h1 (B/op) | 1,105 | 0 | -1,105 |
+| BDN KafkaSendBenchmarks Send h4 (B/op) | 1,696 | 0 | -1,696 |
+| BDN DeliveryTerm Deliver None Null (B/op) | 198 | 193 | -5 |
+| BDN DeliveryTerm Deliver None Kafka (B/op) | 1,643 | 220 | -1,423 |
+| BDN DeliveryTerm Deliver PerKey Null (B/op) | 245 | 193 | -52 |
+| BDN DeliveryTerm Deliver PerKey Kafka (B/op) | 1,603 | 194 | -1,409 |
+| BDN HeadersParserBenchmarks Parse One (B/op) | 152 | 96 | -56 |
+| BDN HeadersParserBenchmarks Parse Three (B/op) | 400 | 248 | -152 |
+| BDN HeadersParserBenchmarks Parse Escaped (B/op) | 152 | 152 | 0 |
+
+Not in this table: `kafka-dlq` (verb added on 2026-11-10, after the initial baseline) and the retired Database destination cells (`term * database`, `dest`, BDN `DatabaseSendBenchmarks`, `flat --target dest`, removed on 2026-11-11).
+
+### Notes
+
+- **Load.** The method calls for an idle machine and this run did not have one. The allocation figures hold anyway. Spread across the three runs is 0.0-10.7 B for every `kafka`, `kafka-dlq` and `term` cell, at most 43.0 B/row for `session` and at most 281.2 B/call (0.1% of the cell) for `fixed`. Rates, BDN Mean and Gen counts are the affected columns. Do not compare them with other sections.
+- **Against the latest sections.** No `kafka`, `kafka-dlq` or `term` cell moved by more than 16.0 B since `## 2026-11-14 — Raw Kafka produce`: kafka-only 0.0 B/msg, kafka-dlq 304.0 / 320.0 / 368.0 B/dlq-msg, `term` kafka 201.6 / 191.6 / 248.3 B/msg (213.1 / 191.5 / 248.3 there), `term` dlq 895.4 / 930.3 / 992.2 B/dlq-msg (911.4 / 929.3 / 992.3 there). Those figures come from another machine, so the two differences on the None cells are not attributed. #2, #3 and #4 are not allocation changes and appended no section.
+- **Idle** stays a high-noise cell: medians 57.1-132.0 B/s, spread 37.3-127.2 B/s.
+- **Gating** is unchanged: interleaved base vs branch runs on one machine ([`docs/development.md#measuring-allocations`](../../docs/development.md#measuring-allocations)).
