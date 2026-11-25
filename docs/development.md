@@ -42,10 +42,10 @@ git tag relay/vX.Y.Z && git push origin relay/vX.Y.Z
 git tag client/vX.Y.Z && git push origin client/vX.Y.Z
 ```
 
-- A prerelease suffix is allowed, for example `client/v2.1.0-rc.1`.
+- A prerelease suffix is allowed, for example `client/v1.2.0-rc.1`.
 - The version comes only from the tag. No file in the repo holds a version.
 - Re-running `cd.yml` for the same tag is idempotent. A change that alters the image digest needs a new patch tag. Never move an existing tag.
-- First tags: `relay/v1.0.0` and `client/v2.0.0`.
+- First tags: `relay/v1.0.0` and `client/v1.0.0`.
 
 `SERVICE_VERSION`: a released image reports `SERVICE_VERSION` and OTel `service.version` `0.0.0-ci.g<sha7>`, because the image is built once in CI and only promoted by tag. The release version exists only as the image tag. Deployments set env `SERVICE_VERSION=<image tag>`. Env vars override the image `ENV`. `SERVICE_COMMIT` is already the tagged commit.
 

@@ -77,16 +77,9 @@ public sealed class PostgreSqlOutboxStatsTests(PostgreSqlStatsFixture stats) : I
                 retry_count           integer      NOT NULL DEFAULT 0,
                 next_attempt_at       timestamptz  NOT NULL DEFAULT now(),
                 last_error            text,
-                source_outbox         text,
-                source_id             bigint,
-                source_destination    text,
-                dead_lettered_at      timestamptz,
-                dead_letter_reason    text,
-                dead_letter_attempts  integer,
                 CONSTRAINT outbox_headers_is_object         CHECK (jsonb_typeof(headers) = 'object'),
                 CONSTRAINT outbox_header_values_are_strings CHECK (NOT jsonb_path_exists(headers, '$.* ? (@.type() != "string")')),
-                CONSTRAINT outbox_retry_count_non_negative  CHECK (retry_count >= 0),
-                CONSTRAINT outbox_source_complete           CHECK ((source_outbox IS NULL) = (source_id IS NULL))
+                CONSTRAINT outbox_retry_count_non_negative  CHECK (retry_count >= 0)
             ) PARTITION BY RANGE (id);
             CREATE INDEX outbox_tx_id_id_idx ON {table} (tx_id, id);
             CREATE INDEX outbox_failed_message_key_idx ON {table} (message_key, next_attempt_at) WHERE retry_count > 0;

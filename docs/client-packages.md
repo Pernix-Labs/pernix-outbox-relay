@@ -28,7 +28,7 @@ All three versions move together. NuGet resolves the provider's `Pernix.OutboxRe
 
 `PostgreSqlOutboxSchema.Scripts(table, namePrefix)` returns the relay's outbox DDL, rendered for your table, as `OutboxSchemaScript(Version, Name, Sql)` records in `Version` order. `Name` is the script name without extension, for example `V001__create_outbox`. Neither the package nor the relay runs DDL. Your migration tool or DBA applies each script once, in `Version` order, under a role with `CREATE` on the schema. The schema must exist before the first script runs: the scripts create no schema.
 
-Columns after V001 and V002: `id`, `tx_id`, `message_key`, `payload`, `headers`, `route`, `created_at`, `retry_count`, `next_attempt_at`, `last_error`. V001 also creates six destination-only columns, which V002 drops (see [Compatibility and versioning](#compatibility-and-versioning)). The producer writes `message_key`, `payload`, `headers` and `route`. `route` is `text`, nullable, checked by constraint `<prefix>_route_format` (see [Routes](#routes)).
+Columns: `id`, `tx_id`, `message_key`, `payload`, `headers`, `route`, `created_at`, `retry_count`, `next_attempt_at`, `last_error`. The producer writes `message_key`, `payload`, `headers` and `route`. `route` is `text`, nullable, checked by constraint `<prefix>_route_format` (see [Routes](#routes)).
 
 EF Core migration:
 
@@ -74,7 +74,6 @@ Flyway: commit each script under your project's next free Flyway version, for ex
 internal static readonly IReadOnlyDictionary<int, string> FlywayFiles = new Dictionary<int, string>
 {
     [1] = "V42__sales_outbox_create_outbox.sql",
-    [2] = "V43__sales_outbox_drop_destination_columns.sql",
 };
 ```
 
@@ -104,7 +103,7 @@ foreach (var script in PostgreSqlOutboxSchema.Scripts(OutboxTable.Parse("sales.o
 }
 ```
 
-Name prefix. The scripts' named indexes and constraints start with `namePrefix`, which defaults to the table name (`table.Name`, without the schema). PostgreSQL names the primary key (`<table>_pkey`) and the identity sequence (`<table>_id_seq`) from the table, not from `namePrefix`. Index and constraint names are unique per schema and PostgreSQL allows 63 bytes, so the prefix may be at most 63 bytes minus the longest name suffix of the shipped scripts: 37 bytes with V001 and V002 (suffix `_header_values_are_strings`, 26 bytes, in V001. V002 names no index or constraint). A longer prefix is refused with `ArgumentException` (CE7), never truncated. Pass a shorter prefix for a long table name, and a distinct prefix for each of two outbox tables in one schema:
+Name prefix. The scripts' named indexes and constraints start with `namePrefix`, which defaults to the table name (`table.Name`, without the schema). PostgreSQL names the primary key (`<table>_pkey`) and the identity sequence (`<table>_id_seq`) from the table, not from `namePrefix`. Index and constraint names are unique per schema and PostgreSQL allows 63 bytes, so the prefix may be at most 63 bytes minus the longest name suffix of the shipped scripts: 37 bytes with V001 (suffix `_header_values_are_strings`, 26 bytes). A longer prefix is refused with `ArgumentException` (CE7), never truncated. Pass a shorter prefix for a long table name, and a distinct prefix for each of two outbox tables in one schema:
 
 <!-- snippet: ddl-name-prefix -->
 ```csharp
@@ -113,7 +112,7 @@ var table = OutboxTable.Parse("sales.customer_account_ledger_entry_events_outbox
 var scripts = PostgreSqlOutboxSchema.Scripts(table, namePrefix: "ledger_outbox");
 ```
 
-Schema upgrades. A later additive script `Vnnn` ships in a client minor version, a destructive one in a major, and `PostgreSqlOutboxSchema.Version` rises. Add one migration per new script, in order. DDL is additive only, with one exception: V002 (client 2.0.0) drops columns and their data, see the 2.0.0 release note.
+Schema upgrades. A later additive script `Vnnn` ships in a client minor version, a destructive one in a major, and `PostgreSqlOutboxSchema.Version` rises. Add one migration per new script, in order.
 
 Migration tool notes. DbUp journals by script name and Flyway by version. A second outbox table therefore needs its own script names in DbUp (the example prefixes them with the table text). In Flyway it needs its own versions or a separate schema history table (`flyway.table`). A separate location alone is not enough, because all locations share the versions of one schema history table.
 
@@ -538,7 +537,6 @@ Publisher and core (`Pernix.OutboxRelay.Client`, `Pernix.OutboxRelay.Client.Post
 | CE12 | `ArgumentException` | `Route must match ^[a-z0-9][a-z0-9._-]{0,62}$: 1 to 63 lowercase ASCII letters, digits, '.', '-' or '_', starting with a letter or digit.` | Route outside the [format](#routes), at the same three call sites. | Fix the route text. |
 | CE13 | `ArgumentException` | `Message route '<route>' differs from scoped route '<scoped>'.` `Message <i> route '<route>' differs from scoped route '<scoped>'.` | A route-scoped publisher or keyed queue got a message with another route. Nothing written or queued. Through `UseOutbox(scopedPublisher)` it leaves `CommitAsync` and the transaction is not committed. | Remove `WithRoute`, or use the service registered for that route. |
 | CE14 | `PostgresException` `23514` (not wrapped) | .NET text | Hand-written SQL inserted a route outside the format. Constraint `<prefix>_route_format`. The business transaction rolls back. | Fix the route, or set it through `WithRoute`. |
-| CE15 | `PostgresException` `42703` (not wrapped) | .NET text | Routed publish on a table created from 1.0.0's V001 (no `route` column). Or a hand-SQL producer builds its column list from `OutboxColumns.ProducerWritten` or `OutboxColumns.All` against such a table. | Add the column and CHECK as in V001, or recreate the table from 1.1.0's V001. |
 
 Log (EF package):
 
@@ -759,15 +757,10 @@ Both registrations validate `route` at the call (CE11, CE12). A second registrat
 
 | Item | Value |
 |---|---|
-| Client `1.x` | This relay needs V001 with `route` (client 1.1.0+), and a routed row needs a destination that maps its route (producer contract PCV1: outbox columns, header rules, `tx_id` default). The `route` column added in 1.1.0 is an optional additive extension of PCV1: nullable, no default, and a route-less row is delivered as before, so 1.1.0 is a minor. The relay requires the column: startup refuses an outbox table created from 1.0.0's V001, which lacks it. |
-| Client `2.x` | Same producer contract as 1.1.0 for rows. Ships V002, which drops the six destination-only columns. The relay accepts the outbox table with or without them, so V002 and the relay deploy can go in either order, except on a table that is a Database destination target (see the 2.0.0 release note). |
-| Schema | `PostgreSqlOutboxSchema.Version` = 2 (V001, with `route` since 1.1.0, and V002 since 2.0.0). |
+| Client `1.x` | Producer contract PCV1: outbox columns, header rules, `tx_id` default, nullable `route` with CHECK `<prefix>_route_format`. The relay requires the `route` column, and a routed row needs a destination that maps its route. |
+| Schema | `PostgreSqlOutboxSchema.Version` = 1 (V001). |
 | Asset | `net8.0`, runs on net8, net9 and net10 runtimes. |
 | Dependency floors | As in [Packages](#packages). The EF floor is tested (`Client.EntityFrameworkCore.Floor.Integration.Tests`). The Npgsql floor is not tested (known gap). |
 | PostgreSQL tested | 13.23 (DDL apply), 17.11 (all suites). |
 
-SemVer: major = producer contract change or breaking API, minor = new API or new `Vnnn` script, patch = fixes. A destructive `Vnnn` is a major: V002 is the one such script (2.0.0). The package version is independent of the relay version line (tags `client/v*` vs `relay/v*`, [ADR 0013](adr/0013-adopt-pernix-ci-and-tag-only-versions.md)). A relay release that needs schema version N or later says so, and the matching client minor ships `V00N`. Prerelease versions come from `client/vX.Y.Z-<pre>` tags and are for trial only.
-
-Release note 2.0.0. Breaking. The relay's Database destination is removed (ADR 0010). `OutboxColumns` loses `SourceOutbox`, `SourceId`, `SourceDestination`, `DeadLetteredAt`, `DeadLetterReason` and `DeadLetterAttempts`, and `OutboxColumns.All` lists 10 columns. `OutboxColumns.ProducerWritten` is unchanged. New script V002 (`V002__drop_destination_columns`), `PostgreSqlOutboxSchema.Version` = 2. V002 drops `source_outbox`, `source_id`, `source_destination`, `dead_lettered_at`, `dead_letter_reason` and `dead_letter_attempts`, and with them the `<prefix>_source_complete` constraint and the `<prefix>_source_uq` index. This is the one exception to "DDL is additive only". Data in those columns is lost. Only a table that received rows as a Database destination target holds such data. Upgrade: add one migration for V002 after V001. The relay accepts the outbox table before and after V002, so for an outbox table there is no ordering constraint with the relay deploy. A table that is a Database destination target takes V002 only after every relay delivering into it runs this build or has dropped that destination. An older relay names the dropped columns: its inserts into that table fail with `42703`, rows stall in its source outbox, and on restart its target validation refuses the table with "missing columns". V002 takes an `ACCESS EXCLUSIVE` lock: no table rewrite, but it waits for open transactions on the table and blocks inserts while it waits. Set `lock_timeout` (for example `SET lock_timeout = '5s'`) in the migration session and retry on timeout. A view, rule or foreign key on a dropped column fails V002 and nothing is applied: drop or rewrite that object first.
-
-Release note 1.1.0. Additive: `OutboxMessage.Route`, `WithRoute`, `OutboxColumns.Route` and the route-scoped registrations are new. `OutboxColumns.ProducerWritten` and `OutboxColumns.All` gained `route`, and in `All` every column after `headers` moved one position. V001 gained the `route` column and the `<prefix>_route_format` constraint in place, with `PostgreSqlOutboxSchema.Version` still 1. This is a one-time exception to "DDL is additive only", made because no consumer had applied V001. Later schema changes ship as new `Vnnn` scripts. A table created from 1.0.0's V001 lacks `route`: route-less publish still works on it, and routed publish fails with `PostgresException` `42703` (CE15).
+The first client version is 1.0.0. SemVer: major = producer contract change or breaking API, minor = new API or new `Vnnn` script, patch = fixes. A destructive `Vnnn` is a major. The package version is independent of the relay version line (tags `client/v*` vs `relay/v*`, [ADR 0013](adr/0013-adopt-pernix-ci-and-tag-only-versions.md)). A relay release that needs schema version N or later says so, and the matching client minor ships `V00N`. Prerelease versions come from `client/vX.Y.Z-<pre>` tags and are for trial only.

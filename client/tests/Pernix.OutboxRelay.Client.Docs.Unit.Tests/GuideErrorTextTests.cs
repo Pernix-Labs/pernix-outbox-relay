@@ -71,7 +71,6 @@ public sealed partial class GuideErrorTextTests
     [InlineData("CE12")]
     [InlineData("CE13")]
     [InlineData("CE14")]
-    [InlineData("CE15")]
     [InlineData("Warning")]
     public void Error_table_has_one_row_per_code(string code)
     {

@@ -4,6 +4,7 @@
 **Date:** 2026-11-11
 **Deciders:** Apostolos Stephanou
 **Supersedes:** [0007](./0007-database-transport-resolution-send-bound-and-pool.md) and the "Amendment 2026-11-09: Database Routes" of [0009](./0009-explicit-per-row-routing.md). Also supersedes two clauses of [0008](./0008-producer-client-packages.md): the route amendment's "Later schema changes return to additive `Vnnn` scripts" and the D13 rule that `OutboxColumns.All` equals the columns V001 creates.
+**Superseded in part by:** [0014](./0014-clean-slate-schema-and-client-1-0-0.md) (V002 and client 2.0.0: V001 holds the final table, client starts at 1.0.0).
 
 ## Context
 

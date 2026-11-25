@@ -131,7 +131,7 @@ A pod started with only root-level relay settings finds no outbox, logs `Startup
 
 ## 3. Database prerequisites
 
-- **DDL.** The domain applies [`V001__create_outbox.sql`](../sql/postgresql/V001__create_outbox.sql), then [`V002__drop_destination_columns.sql`](../sql/postgresql/V002__drop_destination_columns.sql), with its own migration tool. The relay accepts the table before and after V002. The relay never runs DDL. The `route` column is required: startup refuses an outbox table without it. Startup also refuses an outbox table whose relay columns differ from V001 in type or nullability, so apply the script's column definitions unchanged.
+- **DDL.** The domain applies [`V001__create_outbox.sql`](../sql/postgresql/V001__create_outbox.sql) with its own migration tool. The relay never runs DDL. The `route` column is required: startup refuses an outbox table without it. Startup also refuses an outbox table whose relay columns differ from V001 in type or nullability, so apply the script's column definitions unchanged.
 - **Grants** for the relay's role, the minimum set:
 
   ```sql

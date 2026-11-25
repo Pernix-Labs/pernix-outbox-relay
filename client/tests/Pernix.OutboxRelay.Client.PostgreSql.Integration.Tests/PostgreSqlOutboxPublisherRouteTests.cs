@@ -76,28 +76,6 @@ public sealed class PostgreSqlOutboxPublisherRouteTests(PostgreSqlFixture postgr
         }
     }
 
-    [Theory]
-    [MemberData(nameof(RoutePublish.Methods), MemberType = typeof(RoutePublish))]
-    public async Task Table_without_route_takes_route_less_publish_and_refuses_routed_publish_with_42703(RoutePublishMethod method)
-    {
-        var table = await postgres.CreateOutboxAsync();
-        await postgres.ExecuteAsync($"ALTER TABLE {table} DROP COLUMN route");
-        var publisher = new PostgreSqlOutboxPublisher(table);
-        var headers = OutboxHeaders.CreateBuilder().Add("h", "v").Build();
-
-        Assert.Null(await RoutePublish.PublishThenCommitAsync(
-            postgres.ConnectionString, publisher, method, OutboxMessage.Create("plain", "p"), OutboxMessage.Create("headers", "p", headers)));
-
-        var exception = await RoutePublish.PublishThenCommitAsync(
-            postgres.ConnectionString, publisher, method, OutboxMessage.Create("routed", "p").WithRoute("alerts"));
-
-        var postgresException = Assert.IsType<PostgresException>(exception);
-        Assert.Equal("42703", postgresException.SqlState);
-        Assert.Equal(
-            ["plain", "headers"],
-            await PostgreSqlFixture.QueryStringsAsync(postgres.ConnectionString, $"SELECT convert_from(message_key, 'UTF8') FROM {table} ORDER BY id"));
-    }
-
     private sealed class NpgsqlActivityRecorder : IDisposable
     {
         private readonly ConcurrentQueue<Activity> stopped = new();

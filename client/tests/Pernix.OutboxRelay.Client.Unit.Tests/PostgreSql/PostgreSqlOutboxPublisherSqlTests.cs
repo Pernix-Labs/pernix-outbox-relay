@@ -6,9 +6,9 @@ namespace Pernix.OutboxRelay.Client.Unit.Tests.PostgreSql;
 // INSERT texts, selection per (route, headers) and the scoped conflict rule, through the internal SqlFor / RouteFor.
 public sealed class PostgreSqlOutboxPublisherSqlTests
 {
-    // 1.0.0 texts, byte for byte.
-    private const string Insert100 = "INSERT INTO risk.outbox (message_key, payload) VALUES ($1, $2)";
-    private const string InsertWithHeaders100 = "INSERT INTO risk.outbox (message_key, payload, headers) VALUES ($1, $2, $3)";
+    // Route-less texts, byte for byte.
+    private const string InsertPlain = "INSERT INTO risk.outbox (message_key, payload) VALUES ($1, $2)";
+    private const string InsertWithHeaders = "INSERT INTO risk.outbox (message_key, payload, headers) VALUES ($1, $2, $3)";
 
     private const string InsertWithRoute = "INSERT INTO risk.outbox (message_key, payload, route) VALUES ($1, $2, $3)";
     private const string InsertWithHeadersAndRoute = "INSERT INTO risk.outbox (message_key, payload, headers, route) VALUES ($1, $2, $3, $4)";
@@ -18,12 +18,12 @@ public sealed class PostgreSqlOutboxPublisherSqlTests
     private static readonly OutboxHeaders Headers = OutboxHeaders.CreateBuilder().Add("hname", "hvalue-secret").Build();
 
     [Fact]
-    public void Route_less_messages_select_the_1_0_0_texts()
+    public void Route_less_messages_select_the_route_less_texts()
     {
         var publisher = new PostgreSqlOutboxPublisher(Table);
 
-        Assert.Equal(Insert100, publisher.SqlFor(null, OutboxMessage.Create("k", "p")));
-        Assert.Equal(InsertWithHeaders100, publisher.SqlFor(null, OutboxMessage.Create("k", "p", Headers)));
+        Assert.Equal(InsertPlain, publisher.SqlFor(null, OutboxMessage.Create("k", "p")));
+        Assert.Equal(InsertWithHeaders, publisher.SqlFor(null, OutboxMessage.Create("k", "p", Headers)));
     }
 
     [Fact]
@@ -49,8 +49,8 @@ public sealed class PostgreSqlOutboxPublisherSqlTests
     }
 
     [Theory]
-    [InlineData(false, false, Insert100)]
-    [InlineData(false, true, InsertWithHeaders100)]
+    [InlineData(false, false, InsertPlain)]
+    [InlineData(false, true, InsertWithHeaders)]
     [InlineData(true, false, InsertWithRoute)]
     [InlineData(true, true, InsertWithHeadersAndRoute)]
     public void Plain_publisher_writes_the_message_route(bool routed, bool withHeaders, string expectedSql)

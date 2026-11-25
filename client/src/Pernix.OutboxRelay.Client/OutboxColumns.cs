@@ -1,6 +1,6 @@
 namespace Pernix.OutboxRelay.Client;
 
-/// <summary>Column names of the outbox table, as created by the relay's V001 and V002 scripts.</summary>
+/// <summary>Column names of the outbox table, as created by the relay's V001 script.</summary>
 public static class OutboxColumns
 {
     /// <summary>Row id, <c>bigint</c> identity. Relay-owned.</summary>
@@ -36,7 +36,7 @@ public static class OutboxColumns
     /// <summary>Gets the columns a producer writes: <see cref="MessageKey"/>, <see cref="Payload"/>, <see cref="Headers"/>, <see cref="Route"/>.</summary>
     public static IReadOnlyList<string> ProducerWritten { get; } = Array.AsReadOnly(new[] { MessageKey, Payload, Headers, Route });
 
-    /// <summary>Gets every column, in table order after V001 and V002.</summary>
+    /// <summary>Gets every column, in table order.</summary>
     public static IReadOnlyList<string> All { get; } = Array.AsReadOnly(new[]
     {
         Id,
