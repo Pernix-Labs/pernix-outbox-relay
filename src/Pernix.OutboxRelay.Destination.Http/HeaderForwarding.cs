@@ -41,6 +41,13 @@ internal sealed class HeaderForwarding
         "Host", "Content-Length", "Expect", "Authorization", "Proxy-Authorization", "Cookie",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    // Names HttpRequestHeaders rejects. Content-Type and Content-Length are handled separately.
+    public static FrozenSet<string> ContentHeaders { get; } = new[]
+    {
+        "Allow", "Content-Disposition", "Content-Encoding", "Content-Language", "Content-Location",
+        "Content-MD5", "Content-Range", "Expires", "Last-Modified",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     public ForwardHeadersMode Mode { get; }
 
     public FrozenSet<string> Names { get; }
@@ -55,6 +62,7 @@ internal sealed class HeaderForwarding
     public bool TryForward(
         MessageHeaders row,
         HttpRequestHeaders target,
+        HttpContentHeaders content,
         FrozenSet<string> overridden,
         HeaderValueCache values,
         PrefixedNameCache? names,
@@ -126,9 +134,12 @@ internal sealed class HeaderForwarding
                 continue;
             }
 
-            if (!target.TryAddWithoutValidation(emitted!, value))
+            var added = ContentHeaders.Contains(emitted!)
+                ? content.TryAddWithoutValidation(emitted!, value)
+                : target.TryAddWithoutValidation(emitted!, value);
+            if (!added)
             {
-                fault = Fault($"forwarded header '{emitted}' cannot be sent as a request header");
+                fault = Fault($"forwarded header '{emitted}' cannot be sent");
                 return false;
             }
         }
@@ -170,7 +181,7 @@ internal sealed class HeaderForwarding
 
 internal sealed class HeaderPlan
 {
-    private readonly (string Name, ValueTemplate Value)[] entries;
+    private readonly (string Name, ValueTemplate Value, bool IsContent)[] entries;
 
     public HeaderPlan(IEnumerable<(string Name, ValueTemplate Value)> entries, IEnumerable<string> relayOwned)
     {
@@ -194,7 +205,7 @@ internal sealed class HeaderPlan
             }
         }
 
-        this.entries = [.. merged];
+        this.entries = [.. merged.Select(static e => (e.Name, e.Value, HeaderForwarding.ContentHeaders.Contains(e.Name)))];
         Overridden = positions.Keys.Concat(relayOwned).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -202,18 +213,19 @@ internal sealed class HeaderPlan
 
     public int Count => entries.Length;
 
-    public bool TryApply(in RenderContext row, HttpRequestHeaders target, [NotNullWhen(false)] out DeliveryResult? fault)
+    public bool TryApply(in RenderContext row, HttpRequestHeaders target, HttpContentHeaders content, [NotNullWhen(false)] out DeliveryResult? fault)
     {
-        foreach (var (name, template) in entries)
+        foreach (var (name, template, isContent) in entries)
         {
             if (!template.TryRenderHeaderValue(row, out var value, out fault))
             {
                 return false;
             }
 
-            if (!target.TryAddWithoutValidation(name, value))
+            var added = isContent ? content.TryAddWithoutValidation(name, value) : target.TryAddWithoutValidation(name, value);
+            if (!added)
             {
-                fault = new DeliveryResult.MessageFault($"header '{name}' cannot be sent as a request header", Permanent: true);
+                fault = new DeliveryResult.MessageFault($"header '{name}' cannot be sent", Permanent: true);
                 return false;
             }
         }

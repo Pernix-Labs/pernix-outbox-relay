@@ -144,11 +144,11 @@ public sealed class HeaderForwardingTests
     {
         var plan = Plan([("Tenant-Id", "config")], []);
         var row = Row(("tenant-id", "row"), ("traceparent", "t"));
-        var request = new HttpRequestMessage();
+        var request = Request();
         HashSet<string>? seen = null;
 
-        Assert.True(new HeaderForwarding(null).TryForward(row, request.Headers, plan.Overridden, new HeaderValueCache(), null, ref seen, out _, out var fault), Error(fault));
-        Assert.True(plan.TryApply(Context(row), request.Headers, out fault), Error(fault));
+        Assert.True(new HeaderForwarding(null).TryForward(row, request.Headers, request.Content!.Headers, plan.Overridden, new HeaderValueCache(), null, ref seen, out _, out var fault), Error(fault));
+        Assert.True(plan.TryApply(Context(row), request.Headers, request.Content!.Headers, out fault), Error(fault));
 
         Assert.Equal("config", Value(request, "tenant-id"));
         Assert.Equal("t", Value(request, "traceparent"));
@@ -179,9 +179,9 @@ public sealed class HeaderForwardingTests
     public void Plan_dedupes_names_last_wins()
     {
         var plan = Plan([("a", "1"), ("A", "2")], []);
-        var request = new HttpRequestMessage();
+        var request = Request();
 
-        Assert.True(plan.TryApply(Context(Row()), request.Headers, out var fault), Error(fault));
+        Assert.True(plan.TryApply(Context(Row()), request.Headers, request.Content!.Headers, out var fault), Error(fault));
 
         Assert.Equal(1, plan.Count);
         Assert.Equal("2", Value(request, "a"));
@@ -236,9 +236,9 @@ public sealed class HeaderForwardingTests
         HashSet<string>? seen = null;
         var forwarding = new HeaderForwarding(null);
 
-        Assert.True(forwarding.TryForward(Row(headers), new HttpRequestMessage().Headers, NoOverrides, new HeaderValueCache(), null, ref seen, out _, out var fault), Error(fault));
+        Assert.True(forwarding.TryForward(Row(headers), new HttpRequestMessage().Headers, new ByteArrayContent([]).Headers, NoOverrides, new HeaderValueCache(), null, ref seen, out _, out var fault), Error(fault));
         var first = seen;
-        Assert.True(forwarding.TryForward(Row(headers), new HttpRequestMessage().Headers, NoOverrides, new HeaderValueCache(), null, ref seen, out _, out fault), Error(fault));
+        Assert.True(forwarding.TryForward(Row(headers), new HttpRequestMessage().Headers, new ByteArrayContent([]).Headers, NoOverrides, new HeaderValueCache(), null, ref seen, out _, out fault), Error(fault));
 
         Assert.NotNull(first);
         Assert.Same(first, seen);
@@ -255,12 +255,74 @@ public sealed class HeaderForwardingTests
     }
 
     [Fact]
-    public void Content_header_on_request_headers_is_a_permanent_fault()
+    public void Content_header_set_is_the_routed_list()
     {
-        var fault = ForwardFault(new HeaderForwarding(null), Row(("content-encoding", "gzip")));
+        Assert.Equal(
+            ["Allow", "Content-Disposition", "Content-Encoding", "Content-Language", "Content-Location", "Content-MD5", "Content-Range", "Expires", "Last-Modified"],
+            HeaderForwarding.ContentHeaders.Order(StringComparer.Ordinal));
+    }
 
-        Assert.True(fault.Permanent);
-        Assert.Contains("'content-encoding'", fault.Error, StringComparison.Ordinal);
+    [Theory]
+    [InlineData("content-encoding", "gzip")]
+    [InlineData("Allow", "GET")]
+    [InlineData("Content-Disposition", "attachment")]
+    [InlineData("Content-Language", "en")]
+    [InlineData("Content-Location", "/a")]
+    [InlineData("Content-MD5", "Q2hlY2s=")]
+    [InlineData("Content-Range", "bytes 0-1/2")]
+    [InlineData("Expires", "0")]
+    [InlineData("Last-Modified", "Tue, 01 Dec 2026 00:00:00 GMT")]
+    public void Forwarded_content_header_lands_in_content_headers(string name, string value)
+    {
+        var request = Forward(new HeaderForwarding(null), Row((name, value)));
+
+        Assert.Empty(request.Headers);
+        Assert.Equal(value, ContentValue(request, name));
+    }
+
+    [Fact]
+    public void Prefixed_content_header_stays_on_request_headers()
+    {
+        var request = Forward(Forwarding(ForwardHeadersMode.All, prefix: "x-outbox-"), Row(("content-encoding", "gzip")));
+
+        Assert.Equal("gzip", Value(request, "x-outbox-content-encoding"));
+        Assert.Null(ContentValue(request, "x-outbox-content-encoding"));
+    }
+
+    [Fact]
+    public void Plan_content_header_lands_in_content_headers()
+    {
+        var plan = Plan([("Content-Encoding", "gzip")], []);
+        var request = Request();
+
+        Assert.True(plan.TryApply(Context(Row()), request.Headers, request.Content!.Headers, out var fault), Error(fault));
+
+        Assert.Empty(request.Headers);
+        Assert.Equal("gzip", ContentValue(request, "content-encoding"));
+    }
+
+    [Fact]
+    public void Plan_content_header_wins_over_forwarded_content_header()
+    {
+        var plan = Plan([("Content-Encoding", "br")], []);
+        var row = Row(("content-encoding", "gzip"));
+        var request = Request();
+        HashSet<string>? seen = null;
+
+        Assert.True(new HeaderForwarding(null).TryForward(row, request.Headers, request.Content!.Headers, plan.Overridden, new HeaderValueCache(), null, ref seen, out _, out var fault), Error(fault));
+        Assert.True(plan.TryApply(Context(row), request.Headers, request.Content.Headers, out fault), Error(fault));
+
+        Assert.Equal("br", ContentValue(request, "content-encoding"));
+    }
+
+    [Fact]
+    public void Relay_owned_content_header_skips_forwarded_content_header()
+    {
+        var plan = Plan([], ["Content-Language"]);
+
+        var request = Forward(new HeaderForwarding(null), Row(("content-language", "fr")), plan.Overridden, out _);
+
+        Assert.Null(ContentValue(request, "content-language"));
     }
 
     [Fact]
@@ -357,10 +419,10 @@ public sealed class HeaderForwardingTests
         var names = forwarding.CreateNameCache();
         HashSet<string>? seen = null;
 
-        var first = new HttpRequestMessage();
-        var second = new HttpRequestMessage();
-        Assert.True(forwarding.TryForward(Row(("tenant-id", "acme")), first.Headers, NoOverrides, values, names, ref seen, out _, out var fault), Error(fault));
-        Assert.True(forwarding.TryForward(Row(("tenant-id", "acme")), second.Headers, NoOverrides, values, names, ref seen, out _, out fault), Error(fault));
+        var first = Request();
+        var second = Request();
+        Assert.True(forwarding.TryForward(Row(("tenant-id", "acme")), first.Headers, first.Content!.Headers, NoOverrides, values, names, ref seen, out _, out var fault), Error(fault));
+        Assert.True(forwarding.TryForward(Row(("tenant-id", "acme")), second.Headers, second.Content!.Headers, NoOverrides, values, names, ref seen, out _, out fault), Error(fault));
 
         Assert.NotNull(names);
         Assert.Same(NameOf(first), NameOf(second));
@@ -392,10 +454,10 @@ public sealed class HeaderForwardingTests
 
     private static HttpRequestMessage Forward(HeaderForwarding forwarding, MessageHeaders row, FrozenSet<string> overridden, out string? contentType)
     {
-        var request = new HttpRequestMessage();
+        var request = Request();
         HashSet<string>? seen = null;
         Assert.True(
-            forwarding.TryForward(row, request.Headers, overridden, new HeaderValueCache(), forwarding.CreateNameCache(), ref seen, out contentType, out var fault),
+            forwarding.TryForward(row, request.Headers, request.Content!.Headers, overridden, new HeaderValueCache(), forwarding.CreateNameCache(), ref seen, out contentType, out var fault),
             Error(fault));
         return request;
     }
@@ -408,12 +470,17 @@ public sealed class HeaderForwardingTests
 
     private static DeliveryResult.MessageFault ForwardFault(HeaderForwarding forwarding, MessageHeaders row, ref HashSet<string>? seen)
     {
-        Assert.False(forwarding.TryForward(row, new HttpRequestMessage().Headers, NoOverrides, new HeaderValueCache(), null, ref seen, out _, out var fault));
+        Assert.False(forwarding.TryForward(row, new HttpRequestMessage().Headers, new ByteArrayContent([]).Headers, NoOverrides, new HeaderValueCache(), null, ref seen, out _, out var fault));
         return Assert.IsType<DeliveryResult.MessageFault>(fault);
     }
 
     private static string? Value(HttpRequestMessage request, string name) =>
         request.Headers.NonValidated.TryGetValues(name, out var values) ? values.ToString() : null;
+
+    private static string? ContentValue(HttpRequestMessage request, string name) =>
+        request.Content!.Headers.NonValidated.TryGetValues(name, out var values) ? values.ToString() : null;
+
+    private static HttpRequestMessage Request() => new() { Content = new ByteArrayContent([]) };
 
     private static string NameOf(HttpRequestMessage request) => Assert.Single(request.Headers.NonValidated).Key;
 
