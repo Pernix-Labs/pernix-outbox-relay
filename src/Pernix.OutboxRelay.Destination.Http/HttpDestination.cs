@@ -189,12 +189,19 @@ internal sealed class HttpDestination : IDestination
                 }
 
                 // A mapper may replace the content: sign the bytes that are sent.
-                var body = ReferenceEquals(request.Content, content)
-                    ? message.Payload
-                    : request.Content is { } mappedContent
-                        ? await mappedContent.ReadAsByteArrayAsync(deadline).ConfigureAwait(false)
-                        : [];
-                if (!signer.TrySign(request, body, row, out var signFault, webhookId))
+                ReadOnlyMemory<byte> body = message.Payload;
+                if (!ReferenceEquals(request.Content, content))
+                {
+                    var read = await ReadMappedBodyAsync(request.Content, deadline).ConfigureAwait(false);
+                    if (read.Fault is { } readFault)
+                    {
+                        return readFault;
+                    }
+
+                    body = read.Body;
+                }
+
+                if (!signer.TrySign(request, body.Span, row, out var signFault, webhookId))
                 {
                     return signFault;
                 }
@@ -274,6 +281,25 @@ internal sealed class HttpDestination : IDestination
         catch (Exception exception)
         {
             return new DeliveryResult.DestinationFault($"{exception.GetType().Name} in request mapper '{plan.RequestMapper}'");
+        }
+    }
+
+    // Mapper-supplied content is mapper code: a throw while reading it is a mapper fault.
+    // Cancellation propagates to SendAsync (term token rethrows, deadline is a timeout).
+    private async ValueTask<(byte[] Body, DeliveryResult? Fault)> ReadMappedBodyAsync(HttpContent? mappedContent, CancellationToken deadline)
+    {
+        if (mappedContent is null)
+        {
+            return ([], null);
+        }
+
+        try
+        {
+            return (await mappedContent.ReadAsByteArrayAsync(deadline).ConfigureAwait(false), null);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return ([], new DeliveryResult.DestinationFault($"{exception.GetType().Name} in request mapper '{plan.RequestMapper}'"));
         }
     }
 

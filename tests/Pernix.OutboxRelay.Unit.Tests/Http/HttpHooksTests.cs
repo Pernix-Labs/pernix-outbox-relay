@@ -207,6 +207,24 @@ public sealed class HttpHooksTests
     }
 
     [Fact]
+    public async Task Mapper_content_read_throw_while_signing_is_a_destination_fault_and_returns_the_gate_context()
+    {
+        var settings = HttpDestinationFixture.Url();
+        settings["RequestMapper"] = "unreadable";
+        settings["Signing:Scheme"] = "HmacSha256";
+        settings["Signing:HeaderName"] = "X-Signature";
+        settings["Signing:Credential"] = "Signing";
+        settings["!HttpCredentials:Signing:SigningSecret"] = "secret";
+        await using var destination = Create(settings, o => o.AddRequestMapper<UnreadableContentMapper>("unreadable"));
+
+        var result = await destination.SendAsync(HttpDestinationFixture.Message(), Ct);
+
+        Assert.Equal(new DeliveryResult.DestinationFault("InvalidOperationException in request mapper 'unreadable'"), result);
+        Assert.Empty(handlers.Single().Requests);
+        AssertGateSettled(destination);
+    }
+
+    [Fact]
     public async Task Classifier_throw_is_a_destination_fault_and_returns_the_gate_context()
     {
         var settings = HttpDestinationFixture.Url();
@@ -324,6 +342,15 @@ public sealed class HttpHooksTests
     private sealed class ThrowingMapper : IHttpRequestMapper
     {
         public DeliveryResult? Map(OutgoingMessage message, HttpRequestMessage request) => throw new FormatException("row 42 secret");
+    }
+
+    private sealed class UnreadableContentMapper : IHttpRequestMapper
+    {
+        public DeliveryResult? Map(OutgoingMessage message, HttpRequestMessage request)
+        {
+            request.Content = new UnreadableContent();
+            return null;
+        }
     }
 
     private sealed class FlakyMapper : IHttpRequestMapper
