@@ -13,3 +13,5 @@ run: run_a1ffd40fb56b
 - 2026-11-26T20:02:10Z gate — ask gate_36f8cb48ae84 on task_b4000bb06009 (status completed): design.md review, R3 agreed
 - 2026-11-26T20:02:42Z gate — design.md approve (foreman), amendment: declarative HttpVersion setting 1.1|2 + http2 guard cell or recorded reason
 - 2026-11-26T20:04:16Z note — design.md approved, HttpVersion amendment folded (task_c3c2db468f70)
+- 2026-11-26T20:08:34Z gate — ask gate_70e5516e56e5 on task_e98fcae0a873 (status completed): tasks.md review, 19 tasks, validate-dag OK depth 9
+- 2026-11-26T20:10:22Z gate — tasks.md approve (foreman). Note: tasks 15/18 measurements with no other workers active; noisy ceiling run -> rerun, never widen
