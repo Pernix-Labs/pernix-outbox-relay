@@ -76,6 +76,7 @@ public static partial class RelayOptionsBinder
     private static bool IsAccepted(Type type, string key, string value, string path, ICollection<string> failures)
     {
         var segments = key.Split(ConfigurationPath.KeyDelimiter);
+        var isElement = false;
         for (var i = 0; i < segments.Length; i++)
         {
             // A property without a public setter (DestinationOptions.Settings) is not a setting.
@@ -93,6 +94,14 @@ public static partial class RelayOptionsBinder
                 return true;
             }
 
+            if (ElementOf(type) is { } element && i == segments.Length - 2 && int.TryParse(segments[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            {
+                path = $"{path}[{segments[i + 1]}]";
+                type = element;
+                isElement = true;
+                break;
+            }
+
             if (i < segments.Length - 1 && !IsSection(type))
             {
                 failures.Add($"{path}: unknown setting '{segments[i + 1]}'");
@@ -104,6 +113,13 @@ public static partial class RelayOptionsBinder
         if (target == typeof(TimeSpan) && !IsDuration(value))
         {
             failures.Add($"{path}: must be a duration in hh:mm:ss form");
+            return false;
+        }
+
+        // The binder drops a list element it cannot convert instead of throwing, so check it here.
+        if (isElement && target == typeof(int) && !int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+        {
+            failures.Add($"{path}: must be an integer");
             return false;
         }
 
@@ -120,7 +136,23 @@ public static partial class RelayOptionsBinder
     private static bool IsDuration(string value) =>
         Duration().IsMatch(value) && TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out _);
 
-    private static bool IsSection(Type type) => type.IsClass && type != typeof(string);
+    private static bool IsSection(Type type) => type.IsClass && type != typeof(string) && ElementOf(type) is null;
+
+    private static Type? ElementOf(Type type)
+    {
+        var element = type.IsArray
+            ? type.GetElementType()
+            : type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(List<>) || type.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
+                ? type.GetGenericArguments()[0]
+                : null;
+        return element is not null && IsScalar(element) ? element : null;
+    }
+
+    private static bool IsScalar(Type type)
+    {
+        var target = Nullable.GetUnderlyingType(type) ?? type;
+        return target == typeof(string) || target == typeof(int) || target == typeof(TimeSpan) || target.IsEnum;
+    }
 
     private static bool IsMap(Type type) => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>);
 

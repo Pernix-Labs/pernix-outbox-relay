@@ -244,6 +244,87 @@ public sealed class RelayOptionsBinderTests
     }
 
     [Fact]
+    public void Bind_section_accepts_scalar_lists_by_index()
+    {
+        var (bound, failures) = BindLists(new()
+        {
+            ["Block:Names:0"] = "a",
+            ["Block:Names:1"] = "b",
+            ["Block:Codes:0"] = "7",
+            ["Block:Modes:0"] = "strict",
+            ["Block:Delays:0"] = "00:00:05",
+            ["Block:Nested:Names:0"] = "c",
+        });
+
+        Assert.Empty(failures);
+        Assert.Equal(["a", "b"], bound.Names!);
+        Assert.Equal([7], bound.Codes);
+        Assert.Equal([OrderingMode.Strict], bound.Modes);
+        Assert.Equal([TimeSpan.FromSeconds(5)], bound.Delays!);
+        Assert.Equal(["c"], bound.Nested!.Names!);
+    }
+
+    [Fact]
+    public void Bind_section_rejects_an_index_on_a_non_list_property()
+    {
+        var (bound, failures) = BindLists(new()
+        {
+            ["Block:Name:0"] = "sentinel-scalar",
+            ["Block:Nested:0"] = "sentinel-section",
+            ["Block:Names:first"] = "sentinel-key",
+            ["Block:Names:0:Deep"] = "sentinel-deep",
+        });
+
+        Assert.Equal(
+            [
+                "Custom[x].Name: unknown setting '0'",
+                "Custom[x].Names: unknown setting '0'",
+                "Custom[x].Names: unknown setting 'first'",
+                "Custom[x].Nested: unknown setting '0'",
+            ],
+            failures.Order(StringComparer.Ordinal));
+        Assert.All(failures, f => Assert.DoesNotContain("sentinel", f, StringComparison.Ordinal));
+        Assert.Null(bound.Name);
+        Assert.Null(bound.Names!);
+    }
+
+    [Fact]
+    public void Bind_section_rejects_bad_list_element_values_without_the_value()
+    {
+        var (bound, failures) = BindLists(new()
+        {
+            ["Block:Names:0"] = "ok",
+            ["Block:Modes:0"] = "sentinel-mode",
+            ["Block:Delays:0"] = "5",
+            ["Block:Codes:0"] = "sentinel-number",
+        });
+
+        Assert.Contains($"Custom[x].Modes[0]: must be one of {string.Join(", ", Enum.GetNames<OrderingMode>())}", failures);
+        Assert.Contains("Custom[x].Delays[0]: must be a duration in hh:mm:ss form", failures);
+        Assert.Contains("Custom[x].Codes[0]: must be an integer", failures);
+        Assert.All(failures, f => Assert.DoesNotContain("sentinel", f, StringComparison.Ordinal));
+        Assert.Equal(["ok"], bound.Names!);
+        Assert.Null(bound.Codes);
+    }
+
+    private static (ListOptions Bound, List<string> Failures) BindLists(Dictionary<string, string?> settings)
+    {
+        var section = new ConfigurationBuilder().AddInMemoryCollection(settings).Build().GetSection("Block");
+        var failures = new List<string>();
+        return (RelayOptionsBinder.BindSection<ListOptions>(section, "Custom[x]", failures), failures);
+    }
+
+    private sealed class ListOptions
+    {
+        public string? Name { get; set; }
+        public string[]? Names { get; set; }
+        public List<int>? Codes { get; set; }
+        public IReadOnlyList<OrderingMode>? Modes { get; set; }
+        public TimeSpan[]? Delays { get; set; }
+        public ListOptions? Nested { get; set; }
+    }
+
+    [Fact]
     public void Each_destination_keeps_its_raw_element_as_settings()
     {
         var options = Bind(new()

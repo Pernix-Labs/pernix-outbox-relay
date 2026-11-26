@@ -17,6 +17,7 @@
     <Project Path="src/Pernix.OutboxRelay.Core/Pernix.OutboxRelay.Core.csproj" />
     <Project Path="src/Pernix.OutboxRelay.Host/Pernix.OutboxRelay.Host.csproj" />
     <Project Path="src/Pernix.OutboxRelay.Hosting/Pernix.OutboxRelay.Hosting.csproj" />
+    <Project Path="src/Pernix.OutboxRelay.Destination.Http/Pernix.OutboxRelay.Destination.Http.csproj" />
     <Project Path="src/Pernix.OutboxRelay.Destination.Kafka/Pernix.OutboxRelay.Destination.Kafka.csproj" />
     <Project Path="src/Pernix.OutboxRelay.Outbox.PostgreSql/Pernix.OutboxRelay.Outbox.PostgreSql.csproj" />
   </Folder>

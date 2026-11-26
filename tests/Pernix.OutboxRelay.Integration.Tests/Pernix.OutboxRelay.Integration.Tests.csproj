@@ -16,6 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Destination.Http\Pernix.OutboxRelay.Destination.Http.csproj" />
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Host\Pernix.OutboxRelay.Host.csproj" />
     <ProjectReference Include="..\..\client\src\Pernix.OutboxRelay.Client.PostgreSql\Pernix.OutboxRelay.Client.PostgreSql.csproj" />
   </ItemGroup>
