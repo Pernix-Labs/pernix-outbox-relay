@@ -1,6 +1,7 @@
 using Pernix.OutboxRelay.Host.Configuration;
 using Pernix.OutboxRelay.Host.Logging;
 using Pernix.OutboxRelay.Host.Telemetry;
+using Pernix.OutboxRelay.Destination.Http;
 using Pernix.OutboxRelay.Destination.Kafka;
 using Pernix.OutboxRelay.Hosting;
 using Pernix.OutboxRelay.Outbox.PostgreSql;
@@ -16,7 +17,7 @@ try
 
     builder.Services.Configure<HostOptions>(builder.Configuration.GetSection("HostOptions"));
     builder.AddRelayLogging();
-    builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination();
+    builder.AddOutboxRelay().AddPostgreSqlOutbox().AddKafkaDestination().AddHttpDestination();
     builder.AddRelayTelemetry(identity);
 
     var app = builder.Build();

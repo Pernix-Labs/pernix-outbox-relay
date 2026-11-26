@@ -11,6 +11,7 @@ COPY ["src/Pernix.OutboxRelay.Hosting/Pernix.OutboxRelay.Hosting.csproj", "src/P
 COPY ["src/Pernix.OutboxRelay.Core/Pernix.OutboxRelay.Core.csproj", "src/Pernix.OutboxRelay.Core/"]
 COPY ["src/Pernix.OutboxRelay.Outbox.PostgreSql/Pernix.OutboxRelay.Outbox.PostgreSql.csproj", "src/Pernix.OutboxRelay.Outbox.PostgreSql/"]
 COPY ["src/Pernix.OutboxRelay.Destination.Kafka/Pernix.OutboxRelay.Destination.Kafka.csproj", "src/Pernix.OutboxRelay.Destination.Kafka/"]
+COPY ["src/Pernix.OutboxRelay.Destination.Http/Pernix.OutboxRelay.Destination.Http.csproj", "src/Pernix.OutboxRelay.Destination.Http/"]
 
 RUN dotnet restore src/Pernix.OutboxRelay.Host/Pernix.OutboxRelay.Host.csproj
 
