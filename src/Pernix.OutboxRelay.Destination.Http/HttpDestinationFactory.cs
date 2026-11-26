@@ -11,16 +11,25 @@ public sealed class HttpDestinationFactory : IDestinationFactory
     private const string OwnSetting = "Http";
 
     private readonly ConcurrentDictionary<string, HttpDestinationPlan> resolved = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ILoggerFactory loggerFactory;
     private readonly ILogger logger;
     private readonly HttpCredentialSection credentials;
     private readonly HttpHookLookup hooks;
+    private readonly Func<HandlerSettings, HttpMessageHandler>? handlers;
+    private readonly TimeProvider? time;
 
     internal HttpDestinationFactory(ILoggerFactory loggerFactory, HttpCredentialSection credentials)
         : this(loggerFactory, credentials, HttpHookLookup.None)
     {
     }
 
-    internal HttpDestinationFactory(ILoggerFactory loggerFactory, HttpCredentialSection credentials, HttpHookLookup hooks)
+    // handlers and time are test seams: one handler per destination instance and per token cache.
+    internal HttpDestinationFactory(
+        ILoggerFactory loggerFactory,
+        HttpCredentialSection credentials,
+        HttpHookLookup hooks,
+        Func<HandlerSettings, HttpMessageHandler>? handlers = null,
+        TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentNullException.ThrowIfNull(credentials);
@@ -28,6 +37,9 @@ public sealed class HttpDestinationFactory : IDestinationFactory
 
         this.credentials = credentials;
         this.hooks = hooks;
+        this.loggerFactory = loggerFactory;
+        this.handlers = handlers;
+        this.time = time;
         logger = loggerFactory.CreateLogger<HttpDestinationFactory>();
     }
 
@@ -106,11 +118,23 @@ public sealed class HttpDestinationFactory : IDestinationFactory
         }
 
         OAuth2TokenCache CreateTokenCache(AuthenticationOptions options, HttpCredential credential, HandlerSettings handler) =>
-            new(name, options, credential, handler, logger);
+            handlers is null
+                ? new(name, options, credential, handler, logger, time)
+                : new(name, options, credential, handlers(handler), logger, time);
     }
 
-    public IDestination Create(DestinationOptions destination, DestinationContext context) =>
-        throw new NotImplementedException("Http destination creation is not implemented yet.");
+    public IDestination Create(DestinationOptions destination, DestinationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (destination.Name is not { } name || !resolved.TryGetValue(name, out var plan))
+        {
+            throw new InvalidOperationException($"Destination '{destination.Name}' was not validated by the Http transport.");
+        }
+
+        return new HttpDestination(plan, context, loggerFactory.CreateLogger<HttpDestination>(), handlers, time);
+    }
 
     internal HttpDestinationPlan PlanOf(string destination) => resolved[destination];
 

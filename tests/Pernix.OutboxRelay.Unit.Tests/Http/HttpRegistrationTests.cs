@@ -236,14 +236,6 @@ public sealed class HttpRegistrationTests
         Assert.All(failures, f => Assert.DoesNotContain("sentinel", f, StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void Create_is_not_implemented_yet()
-    {
-        var (factory, destination) = Destination(new() { ["Name"] = "LedgerSink", ["Transport"] = "Http" });
-
-        Assert.Throws<NotImplementedException>(() => factory.Create(destination, null!));
-    }
-
     private static RelayStartupValidator BuildValidator(Dictionary<string, string?> settings, Action<HostApplicationBuilder> register)
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
