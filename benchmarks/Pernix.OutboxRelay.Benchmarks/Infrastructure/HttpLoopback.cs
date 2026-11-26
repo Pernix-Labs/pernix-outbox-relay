@@ -8,7 +8,7 @@ using System.Threading.Tasks.Sources;
 
 namespace Pernix.OutboxRelay.Benchmarks.Infrastructure;
 
-// In-memory HTTP/1.1 server for SocketsHttpHandler.ConnectCallback, allocation-free after warm-up.
+// In-memory HTTP/1.1 or prior-knowledge h2c server for SocketsHttpHandler.ConnectCallback, allocation-free after warm-up.
 internal sealed class HttpLoopback
 {
     public const string Host = "loopback.invalid";
@@ -17,11 +17,12 @@ internal sealed class HttpLoopback
 
     private readonly byte[] response;
     private readonly int requestIdOffset;
+    private readonly Http2LoopbackStream.Template? http2;
     private int connects;
     private int inFlight;
     private int peakInFlight;
 
-    public HttpLoopback(int status)
+    public HttpLoopback(int status, bool http2 = false)
     {
         (response, requestIdOffset) = status switch
         {
@@ -29,6 +30,7 @@ internal sealed class HttpLoopback
             204 => NoContent(),
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, "loopback answers 200 or 204"),
         };
+        this.http2 = http2 ? Http2LoopbackStream.Build(status, OkBody) : null;
     }
 
     public int Connects => Volatile.Read(ref connects);
@@ -38,10 +40,20 @@ internal sealed class HttpLoopback
     public ValueTask<Stream> ConnectAsync(SocketsHttpConnectionContext context, CancellationToken cancellationToken) =>
         new(Open());
 
-    public LoopbackStream Open()
+    public Stream Open()
     {
         Interlocked.Increment(ref connects);
-        return new LoopbackStream(this);
+        return http2 is null ? new LoopbackStream(this) : new Http2LoopbackStream(this, http2);
+    }
+
+    internal static void WriteRequestId(Span<byte> digits)
+    {
+        var id = (ulong)Interlocked.Increment(ref requestIds);
+        for (var i = 15; i >= 0; i--)
+        {
+            digits[i] = (byte)"0123456789abcdef"[(int)(id & 0xF)];
+            id >>= 4;
+        }
     }
 
     // Child-process side of the real-socket run: each accepted socket is pumped through one fake stream. Ends at stdin EOF.
@@ -116,7 +128,7 @@ internal sealed class HttpLoopback
         }
     }
 
-    private void Started()
+    internal void Started()
     {
         var now = Interlocked.Increment(ref inFlight);
         var peak = Volatile.Read(ref peakInFlight);
@@ -132,11 +144,13 @@ internal sealed class HttpLoopback
         }
     }
 
-    private void Finished() => Interlocked.Decrement(ref inFlight);
+    internal void Finished() => Interlocked.Decrement(ref inFlight);
+
+    private const string OkBody = "{\"id\":\"0000000000000000\",\"status\":\"accepted\",\"detail\":\"queued for processing\",\"padding\":\"xxxxxxxxx\"}";
 
     private static (byte[], int) Ok()
     {
-        var body = "{\"id\":\"0000000000000000\",\"status\":\"accepted\",\"detail\":\"queued for processing\",\"padding\":\"xxxxxxxxx\"}";
+        var body = OkBody;
         if (body.Length != 100)
         {
             throw new InvalidOperationException($"loopback body is {body.Length} B, expected 100");
@@ -369,13 +383,7 @@ internal sealed class HttpLoopback
         {
             if (responseOffset == 0 && server.requestIdOffset >= 0)
             {
-                var id = (ulong)Interlocked.Increment(ref requestIds);
-                var digits = response.AsSpan(server.requestIdOffset, 16);
-                for (var i = 15; i >= 0; i--)
-                {
-                    digits[i] = (byte)"0123456789abcdef"[(int)(id & 0xF)];
-                    id >>= 4;
-                }
+                WriteRequestId(response.AsSpan(server.requestIdOffset, 16));
             }
 
             var n = Math.Min(destination.Length, response.Length - responseOffset);

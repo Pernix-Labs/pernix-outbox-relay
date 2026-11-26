@@ -19,7 +19,8 @@ internal sealed record HarnessOptions(
     bool Otel,
     string[] Urls,
     int Response,
-    bool Socket)
+    bool Socket,
+    bool Http2)
 {
     public static readonly string[] Verbs = ["term", "kafka", "kafka-dlq", "session", "fixed", "idle", "flat", "churn", "loopback", "http-floor", "http", "http-dlq", "http-stub", "all"];
 
@@ -29,7 +30,7 @@ internal sealed record HarnessOptions(
           term | kafka | kafka-dlq | session | fixed | idle | flat | churn | loopback | http-floor | http | http-dlq | http-stub | all (default)
                                        GC-delta scenarios
         options:
-          --modes None,PerKey,Strict      --dests null,kafka,dlq,http,http-tpl,http-sat,http-dlq (idle: null,kafka,http)
+          --modes None,PerKey,Strict      --dests null,kafka,dlq,http,http-tpl,http-sat,http-dlq,http2 (idle: null,kafka,http)
           --headers 0,1,3,4 (term, kafka, kafka-dlq, http-floor, http, http-dlq, http-stub, flat --target term; session: 1,3)
           --batches 500,100,10,1          --n <count per round>
           --warm <warm-up count>          --rounds <n> (default 3)          --seconds <idle window> (default 30)
@@ -37,11 +38,12 @@ internal sealed record HarnessOptions(
           --urls static,tpl,tpl-raw (http-floor; http, http-dlq, http-stub: static,tpl)
           --response 200|204 (loopback, http-floor, http, http-dlq, http-stub)
           --socket (http: child-process socket server instead of the in-memory loopback)
+          --http2 (loopback: prior-knowledge h2c fake instead of HTTP/1.1)
           --profile                       --otel
         """;
 
     private static readonly OrderingMode[] AllModes = [OrderingMode.None, OrderingMode.PerKey, OrderingMode.Strict];
-    private static readonly string[] TermDests = ["null", "kafka", "dlq", "http", "http-tpl", "http-sat", "http-dlq"];
+    private static readonly string[] TermDests = ["null", "kafka", "dlq", "http", "http-tpl", "http-sat", "http-dlq", "http2"];
     private static readonly string[] IdleDests = ["null", "kafka"];
     private static readonly string[] Targets = ["term", "session"];
     private static readonly int[] HeaderCounts = [0, 1, 3, 4];
@@ -75,6 +77,9 @@ internal sealed record HarnessOptions(
                     continue;
                 case "--socket" when verb == "http":
                     options = options with { Socket = true };
+                    continue;
+                case "--http2" when verb == "loopback":
+                    options = options with { Http2 = true };
                     continue;
             }
 
@@ -161,7 +166,8 @@ internal sealed record HarnessOptions(
             _ => ["static", "tpl", "tpl-raw"],
         },
         Response: 200,
-        Socket: false);
+        Socket: false,
+        Http2: false);
 
     private static T[] List<T>(string name, string value, Func<string, T> parse)
     {

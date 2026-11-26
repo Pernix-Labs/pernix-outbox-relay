@@ -1274,3 +1274,51 @@ Not changed. `SendAsync` is already one relay state machine on the static path: 
 #### Decision
 
 **GAP.** No product or Host runtimeconfig change. Residual relay-owned bytes on `http socket None w500 h1 static 200`: **~350 B/msg** (sampled median 348.6, range 316-362), the `StateMachineBox<DeliveryResult, HttpDestination.<SendAsync>>` of each suspended send beyond the fixed builder cache. `Strict w1` relay-owned: 0 B. Totals that ship: None w500 h1 2,030.5 B/msg, Strict w1 h1 1,656.0 B/msg. `dotnet test --project tests/Pernix.OutboxRelay.Unit.Tests --filter-namespace Pernix.OutboxRelay.Unit.Tests.Http`: 523 passed, 0 failed. No `AllocationCeilings` change.
+
+### HTTP/2 cleartext cell (task 17)
+
+`HttpLoopback(status, http2: true)` serves prior-knowledge h2c through the same `ConnectCallback` path as the h1 cells, so neither uses TLS and the comparison is like for like. `Infrastructure/Http2LoopbackFramer.cs` reads the 24 B preface and 9 B frame headers and skips payloads. It sends `SETTINGS` (`MAX_CONCURRENT_STREAMS` 100, the Kestrel default), acks the client's `SETTINGS`, and sends a connection `WINDOW_UPDATE` per non-empty `DATA` (plus a stream one when `END_STREAM` is not set). It ignores `PRIORITY`, `PING`, `WINDOW_UPDATE`, `RST_STREAM` and `GOAWAY`. Each stream gets one preformatted `HEADERS` frame (`0x88` `:status 200`, then the C6 headers as literals without indexing, `x-request-id` overwritten in place) and one `DATA` frame with `END_STREAM`. All buffers are fixed and there is no HPACK encoder. The file is 362 lines, of which ~90 are `Stream` boilerplate shared in shape with the h1 fake. Term dest `http2` = `HttpVersion` `"2-cleartext"`, static URL, default `MaxRequestsInFlight` 64, so one connection.
+
+| Item | Value |
+|---|---|
+| Code | `16b9593` on `avataraps/spec-http-destination` + the task 17 harness changes |
+| Date | 2026-11-26, 22:10-22:14 UTC |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1, arm64, .NET 10.0.15, Release, workstation non-concurrent GC |
+| Other | `otel=False`. Load average 5-7. Rates are not usable |
+
+```sh
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- loopback --http2
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- loopback --http2 --response 204
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- term --modes None --dests http2,http
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- term --modes None --dests http2 --profile
+```
+
+| Cell | B/req or B/msg |
+|---|---:|
+| loopback h2 200 | 0.0 |
+| loopback h2 204 | 0.0 |
+| term None http2 b500 h1 | **4,049.9** (second run 4,042.2) |
+| term None http b500 h1 (same run, h1 unchanged) | 1,504.8 |
+
+The h2 fake allocates 0.0 B/req (limit 8), so the `http2` cell stays a guard cell candidate and no fallback is taken. The h1 `loopback` 200/204 stay 0.0 and `term None http` stays 1,504.8 after the shared `HttpLoopback` changes. Unlike h1, h2 B/msg varies by a few B between runs: the response arrives on the connection's background read loop, so how many sends suspend at once differs per run.
+
+Per type (`--profile`, reported round, two runs):
+
+| Type | ~B/msg | Owner |
+|---|---:|---|
+| `StateMachineBox<DeliveryResult, HttpDestination.<SendAsync>>` | 420.5 / 440.7 | relay |
+| `HeaderEntry[]` | 323.0 | framework (request + response headers) |
+| `HttpConnectionPool.SendWithVersionDetectionAndRetryAsync` box | 253.1 | framework |
+| `Http2Stream` | 220.6 | framework |
+| `Task` | 190.8 | framework |
+| `Http2Connection.SendAsync` box | 187.1 | framework |
+| `Http2Stream.SendDataAsync`, `SendRequestBodyAsync`, `SendHeadersAsync`, `SendStreamDataAsync`, `ReadResponseHeadersAsync` boxes | 742.3 | framework |
+| `WriteQueueEntry` (3 shapes) | 265.4 | framework (h2 write queue: headers, data, window updates) |
+| `String` | 130.6 / 127.4 | framework (HPACK-decoded header values) |
+| `HttpContentHeaders`, `HttpResponseMessage`, `HttpRequestMessage`, `ReadOnlyMemoryContent`, `Http2WriteStream` | 437.0 | framework |
+| `ContingentProperties`, `CallbackNode`, `Registrations` | 233.9 | framework (per-stream cancellation registration) |
+| `HeldRow` | 60.8 | Core term loop |
+
+**Miss: relay-owned target ≤ 64 B/msg is not met under h2.** Relay-owned = ~430 B/msg (sampled 420.5-440.7), all of it the `HttpDestination.<SendAsync>` box. This is the O9 mechanism seen on the real socket (~350 B/msg there): h2 completes every response on the connection's read loop, so every in-memory send suspends, and 64 concurrent suspended sends exceed the `PoolingAsyncValueTaskMethodBuilder` cache. Relay code does not depend on version. No other `Pernix.OutboxRelay.Destination.Http` type appears in the profile.
+
+Framework floor under h2: term total 4,049.9 − relay box ~430 − Core term loop share 192.8 (from the h1 term vs destination-only delta) ≈ **3,430 B/msg**, vs the h1 in-memory floor 1,312.0. Most of the extra comes from the h2 stack's per-stream async state machines, `Http2Stream`, and write-queue entries. Recorded, not targeted. No `AllocationCeilings` change here: task 18 sets the `term None http2 b500 h1` row from guard runs.

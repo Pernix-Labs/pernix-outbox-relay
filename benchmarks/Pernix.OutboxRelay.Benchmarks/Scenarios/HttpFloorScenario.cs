@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
@@ -18,25 +19,29 @@ internal static class HttpFloorScenario
 
     public static async Task LoopbackAsync(HarnessOptions options)
     {
-        var server = new HttpLoopback(options.Response);
+        var server = new HttpLoopback(options.Response, options.Http2);
         await using var stream = server.Open();
         var request = Encoding.ASCII.GetBytes(
             $"POST /orders HTTP/1.1\r\nHost: {HttpLoopback.Host}\r\nidempotency-key: 123456\r\n" +
             $"Content-Type: {ContentType}\r\nContent-Length: {Workload.Payload.Length}\r\n\r\n");
+        var h2 = options.Http2 ? new H2Exchange(options.Response) : null;
         var buffer = new byte[4096];
         var n = options.Count ?? 1_000_000;
         var warm = options.Warm ?? 100_000;
-        var name = $"loopback {options.Response}";
+        var name = $"loopback{(options.Http2 ? " h2" : string.Empty)} {options.Response}";
+        Func<long, Task> exchange = h2 is null
+            ? count => ExchangeAsync(stream, request, buffer, count)
+            : count => h2.RunAsync(stream, buffer, count);
 
         var last = await RoundRunner.RunAsync(
             "req",
-            () => ExchangeAsync(stream, request, buffer, warm),
+            () => exchange(warm),
             options.Rounds,
             async (round, reported) =>
             {
                 await Task.Yield();
                 var start = Snapshot.Take();
-                await ExchangeAsync(stream, request, buffer, n);
+                await exchange(n);
                 var end = Snapshot.Take();
                 return Measurement.Of(name, round, reported, n, "req", start, end);
             });
@@ -120,6 +125,86 @@ internal static class HttpFloorScenario
                 {
                     throw new InvalidOperationException($"http-floor send answered {(int)status}, expected {(int)sender.Expected}");
                 }
+            }
+        }
+    }
+
+    private sealed class H2Exchange
+    {
+        private const int FrameHeader = 9;
+        private static readonly byte[] Preface = [.. "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"u8, 0, 0, 0, 0x4, 0, 0, 0, 0, 0];
+
+        private readonly byte[] request;
+        private readonly int dataStreamIdOffset;
+        private readonly int responseLength;
+        private bool started;
+        private int streamId = 1;
+
+        public H2Exchange(int status)
+        {
+            // :method POST, :scheme http, :path /, content-type literal: the fake does not decode HPACK.
+            byte[] block = [0x83, 0x86, 0x84, 0x0f, 0x10, (byte)ContentType.Length, .. Encoding.ASCII.GetBytes(ContentType)];
+            var body = Workload.Payload.ToArray();
+            request = new byte[FrameHeader + block.Length + FrameHeader + body.Length];
+            Frame(request, block.Length, 0x1, 0x4);
+            block.CopyTo(request, FrameHeader);
+            dataStreamIdOffset = FrameHeader + block.Length;
+            Frame(request.AsSpan(dataStreamIdOffset), body.Length, 0x0, 0x1);
+            body.CopyTo(request, dataStreamIdOffset + FrameHeader);
+            dataStreamIdOffset += 5;
+
+            // Connection WINDOW_UPDATE (13 B) plus the response frames, for a non-empty body.
+            responseLength = 13 + Http2LoopbackStream.Build(status, "{}".PadRight(100)).Bytes.Length;
+        }
+
+        public async Task RunAsync(Stream stream, byte[] buffer, long count)
+        {
+            if (!started)
+            {
+                started = true;
+                var read = stream.ReadAsync(buffer);
+                await stream.WriteAsync(Preface);
+
+                await ReadExactlyAsync(stream, buffer, read, 24);
+            }
+
+            for (long i = 0; i < count; i++)
+            {
+                BinaryPrimitives.WriteInt32BigEndian(request.AsSpan(5), streamId);
+                BinaryPrimitives.WriteInt32BigEndian(request.AsSpan(dataStreamIdOffset), streamId);
+                streamId += 2;
+                var read = stream.ReadAsync(buffer);
+                await stream.WriteAsync(request);
+                await ReadExactlyAsync(stream, buffer, read, responseLength);
+            }
+        }
+
+        private static void Frame(Span<byte> destination, int length, byte type, byte flags)
+        {
+            destination[0] = (byte)(length >> 16);
+            destination[1] = (byte)(length >> 8);
+            destination[2] = (byte)length;
+            destination[3] = type;
+            destination[4] = flags;
+        }
+
+        private static async ValueTask ReadExactlyAsync(Stream stream, byte[] buffer, ValueTask<int> first, int expected)
+        {
+            var got = await first;
+            while (got < expected)
+            {
+                var n = got == 0 ? 0 : await stream.ReadAsync(buffer);
+                if (n == 0)
+                {
+                    throw new InvalidOperationException("loopback h2: no response");
+                }
+
+                got += n;
+            }
+
+            if (got != expected)
+            {
+                throw new InvalidOperationException($"loopback h2: read {got} B, expected {expected}");
             }
         }
     }

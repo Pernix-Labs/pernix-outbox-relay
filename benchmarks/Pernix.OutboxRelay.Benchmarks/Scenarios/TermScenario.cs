@@ -280,6 +280,10 @@ internal static class TermScenario
                 case "http-sat":
                     createDestination = () => HttpMock.Create(mode, loopback, staticUrl, HttpMock.SaturatedInFlight);
                     break;
+                case "http2":
+                    var loopback2 = HttpMock.Loopback(new HttpLoopback(200, http2: true));
+                    createDestination = () => HttpMock.Create(mode, loopback2, staticUrl, httpVersion: "2-cleartext");
+                    break;
                 case "http-dlq":
                     createDestination = static () => new PermanentFaultDestination();
                     deadLetter = new DeadLetterTarget(HttpMock.DeadLetterName, () => HttpMock.CreateDeadLetter(mode, loopback, staticUrl));

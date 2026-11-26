@@ -31,14 +31,15 @@ internal static class HttpMock
         return handler;
     };
 
-    public static IDestination Create(OrderingMode mode, Func<HandlerSettings, HttpMessageHandler> handlers, string url, int? maxInFlight = null) =>
-        Build(Workload.Destination, mode, handlers, url, maxInFlight, deadLetter: false);
+    public static IDestination Create(
+        OrderingMode mode, Func<HandlerSettings, HttpMessageHandler> handlers, string url, int? maxInFlight = null, string? httpVersion = null) =>
+        Build(Workload.Destination, mode, handlers, url, maxInFlight, deadLetter: false, httpVersion);
 
     public static IDestination CreateDeadLetter(OrderingMode mode, Func<HandlerSettings, HttpMessageHandler> handlers, string url) =>
-        Build(DeadLetterName, mode, handlers, url, maxInFlight: null, deadLetter: true);
+        Build(DeadLetterName, mode, handlers, url, maxInFlight: null, deadLetter: true, httpVersion: null);
 
     private static IDestination Build(
-        string name, OrderingMode mode, Func<HandlerSettings, HttpMessageHandler> handlers, string url, int? maxInFlight, bool deadLetter)
+        string name, OrderingMode mode, Func<HandlerSettings, HttpMessageHandler> handlers, string url, int? maxInFlight, bool deadLetter, string? httpVersion)
     {
         var settings = new Dictionary<string, string?>
         {
@@ -56,6 +57,11 @@ internal static class HttpMock
         if (maxInFlight is { } limit)
         {
             settings["Destinations:0:Http:MaxRequestsInFlight"] = limit.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (httpVersion is not null)
+        {
+            settings["Destinations:0:Http:HttpVersion"] = httpVersion;
         }
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
