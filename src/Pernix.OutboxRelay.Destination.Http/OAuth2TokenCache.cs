@@ -185,7 +185,13 @@ internal sealed class OAuth2TokenCache : IDisposable
                 return (null, "invalid response");
             }
 
-            var lifetime = TimeSpan.FromSeconds(expiresIn) - ExpirySkew;
+            // No expires_in (optional per RFC 6749 5.1): cache until a 401 Invalidate clears it.
+            if (expiresIn is not { } seconds)
+            {
+                return (new CachedToken("Bearer " + accessToken, DateTimeOffset.MaxValue), null);
+            }
+
+            var lifetime = TimeSpan.FromSeconds(seconds) - ExpirySkew;
             return (new CachedToken("Bearer " + accessToken, issuedAt + (lifetime > TimeSpan.Zero ? lifetime : TimeSpan.Zero)), null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -198,10 +204,12 @@ internal sealed class OAuth2TokenCache : IDisposable
         }
     }
 
-    internal static bool TryParse(ReadOnlySpan<byte> body, out string? accessToken, out long expiresIn)
+    // expiresIn is null when expires_in is absent, a token FetchAsync caches until Invalidate.
+    internal static bool TryParse(ReadOnlySpan<byte> body, out string? accessToken, out long? expiresIn)
     {
         accessToken = null;
-        expiresIn = -1;
+        expiresIn = null;
+        var expiresValid = true;
         try
         {
             var reader = new Utf8JsonReader(body);
@@ -228,6 +236,12 @@ internal sealed class OAuth2TokenCache : IDisposable
                     {
                         expiresIn = text;
                     }
+                    else
+                    {
+                        expiresIn = null;
+                        expiresValid = false;
+                        reader.Skip();
+                    }
                 }
                 else
                 {
@@ -241,7 +255,7 @@ internal sealed class OAuth2TokenCache : IDisposable
             return false;
         }
 
-        return !string.IsNullOrEmpty(accessToken) && expiresIn >= 0;
+        return !string.IsNullOrEmpty(accessToken) && expiresValid && expiresIn is null or >= 0;
     }
 
     internal static string Describe(Exception exception)

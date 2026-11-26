@@ -179,7 +179,6 @@ public sealed class OAuth2TokenCacheTests
     [InlineData("not json")]
     [InlineData("[]")]
     [InlineData("{\"expires_in\":3600}")]
-    [InlineData("{\"access_token\":\"t\"}")]
     [InlineData("{\"access_token\":42,\"expires_in\":3600}")]
     public async Task Invalid_body_returns_a_fault(string body)
     {
@@ -189,6 +188,32 @@ public sealed class OAuth2TokenCacheTests
         var result = await cache.GetAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("OAuth2 token: invalid response", result.Fault?.Error);
+    }
+
+    [Fact]
+    public async Task Missing_expires_in_caches_until_invalidated()
+    {
+        var issued = 0;
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent($"{{\"access_token\":\"tok-{++issued}\",\"token_type\":\"Bearer\"}}", Encoding.UTF8, "application/json"),
+        });
+        using var cache = Cache(handler);
+        var ct = TestContext.Current.CancellationToken;
+
+        var first = await cache.GetAsync(ct);
+        time.Advance(TimeSpan.FromDays(3650));
+        var cached = await cache.GetAsync(ct);
+
+        Assert.Equal("Bearer tok-1", first.HeaderValue);
+        Assert.Same(first.HeaderValue, cached.HeaderValue);
+        Assert.Equal(1, handler.Count);
+
+        cache.Invalidate(first.HeaderValue!);
+        var refreshed = await cache.GetAsync(ct);
+
+        Assert.Equal("Bearer tok-2", refreshed.HeaderValue);
+        Assert.Equal(2, handler.Count);
     }
 
     [Fact]
