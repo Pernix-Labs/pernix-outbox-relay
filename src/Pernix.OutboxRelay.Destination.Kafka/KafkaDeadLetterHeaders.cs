@@ -7,28 +7,19 @@ namespace Pernix.OutboxRelay.Destination.Kafka;
 
 internal static class KafkaDeadLetterHeaders
 {
-    public const string Reason = "x-dead-letter-reason";
-    public const string RetryAttempts = "x-retry-attempts";
-    public const string OriginalDestination = "x-original-destination";
-    public const string OriginalOutbox = "x-original-outbox";
-    public const string OriginalId = "x-original-id";
-    public const string FailedAt = "x-failed-at";
-    public const string OriginalRoute = "x-original-route";
+    public const string Reason = DeadLetterHeaderNames.Reason;
+    public const string RetryAttempts = DeadLetterHeaderNames.RetryAttempts;
+    public const string OriginalDestination = DeadLetterHeaderNames.OriginalDestination;
+    public const string OriginalOutbox = DeadLetterHeaderNames.OriginalOutbox;
+    public const string OriginalId = DeadLetterHeaderNames.OriginalId;
+    public const string FailedAt = DeadLetterHeaderNames.FailedAt;
+    public const string OriginalRoute = DeadLetterHeaderNames.OriginalRoute;
 
     private const string FailedAtFormat = "yyyy-MM-dd'T'HH:mm:ss.fff'Z'";
 
     private const int RelayCount = 6;
 
-    internal static readonly IReadOnlySet<string> Names = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        Reason,
-        RetryAttempts,
-        OriginalDestination,
-        OriginalOutbox,
-        OriginalId,
-        FailedAt,
-        OriginalRoute,
-    };
+    internal static readonly IReadOnlySet<string> Names = DeadLetterHeaderNames.All;
 
     // Outbox and destination name bytes. Keys are configured outbox and destination names only, never message content
     // (reason, route), so this process-wide cache stays bounded. Shared by every dead letter of that name: never written,
