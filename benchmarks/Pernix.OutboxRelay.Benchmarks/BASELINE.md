@@ -1028,7 +1028,7 @@ Spike for design R3 (`docs/specs/2026-11-26-http-destination/design.md`, "R3: al
 
 | Item | Value |
 |---|---|
-| Harness commit | the task 1 commit on `avataraps/spec-http-destination` (parent `5b262eb`). No product code is measured |
+| Harness commit | `5088422` on `avataraps/spec-http-destination` (parent `5b262eb`). No product code is measured |
 | Date | 2026-11-26, unprofiled grid 20:20-20:23 UTC |
 | Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1 (26B131), arm64 |
 | .NET | runtime 10.0.15, SDK 10.0.404, Release build |

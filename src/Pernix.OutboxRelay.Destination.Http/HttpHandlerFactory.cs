@@ -14,7 +14,9 @@ internal static class HttpHandlerFactory
     internal const int MaxResponseDrainSize = 64 * 1024;
 
     private static readonly Oid ServerAuthentication = new("1.3.6.1.5.5.7.3.1");
-    private static readonly string[] ProxyVariables = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY"];
+    // Exact upper- and lower-case names only, as read by .NET's environment proxy.
+    private static readonly string[] ProxyVariables =
+        ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"];
 
     public static SocketsHttpHandler Create(HandlerSettings settings, IDictionary? environment = null)
     {
@@ -61,7 +63,7 @@ internal static class HttpHandlerFactory
         {
             if (variable.Key is string name
                 && variable.Value is string { Length: > 0 }
-                && ProxyVariables.Contains(name, StringComparer.OrdinalIgnoreCase))
+                && ProxyVariables.Contains(name, StringComparer.Ordinal))
             {
                 return true;
             }

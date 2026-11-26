@@ -50,7 +50,6 @@ public sealed class HttpHandlerFactoryTests : IDisposable
     [InlineData("https_proxy")]
     [InlineData("http_proxy")]
     [InlineData("all_proxy")]
-    [InlineData("Http_Proxy")]
     public void Proxy_env_variable_enables_proxy(string name)
     {
         using var handler = HttpHandlerFactory.Create(
@@ -58,6 +57,18 @@ public sealed class HttpHandlerFactoryTests : IDisposable
 
         Assert.True(handler.UseProxy);
         Assert.Null(handler.Proxy);
+    }
+
+    [Theory]
+    [InlineData("Http_Proxy")]
+    [InlineData("Https_Proxy")]
+    [InlineData("All_Proxy")]
+    public void Mixed_case_proxy_env_variable_leaves_proxy_off(string name)
+    {
+        using var handler = HttpHandlerFactory.Create(
+            new HandlerSettings(TimeSpan.FromSeconds(1), 1, null), new Hashtable { [name] = "http://proxy.test:3128" });
+
+        Assert.False(handler.UseProxy);
     }
 
     [Fact]

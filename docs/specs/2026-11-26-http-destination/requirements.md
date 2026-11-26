@@ -1,7 +1,7 @@
 ---
 status: approved
 createdAt: 2026-11-26T19:43:00Z
-updatedAt: 2026-11-26T19:47:38Z
+updatedAt: 2026-11-26T20:30:09Z
 approvedAt: 2026-11-26T19:47:38Z
 ---
 
@@ -64,7 +64,7 @@ Current state, relevant facts:
 - **NG11.** Monotonic sequence for ordering-sensitive receivers (F2, R5).
 - **NG12.** Own request-duration histogram. .NET's `System.Net.Http` meter covers it (Req15).
 - **NG13.** `IHttpClientFactory`. Its default logging handler logs the full request URI.
-- **NG14.** Changes to Kafka destination behavior, delivery, ordering, leadership, health, metric or trace semantics in Core. Only Core change: dead-letter header name constants move to Core (Req12). No `OutgoingMessage.Attempt`, no `DestinationFault.RetryAfter` in v1.
+- **NG14.** Changes to Kafka destination behavior, delivery, ordering, leadership, health, metric or trace semantics in Core. Only Core changes: dead-letter header name constants move to Core (Req12), and `RelayOptionsBinder` array-index support (foreman ruling 2026-11-26, `msg_016c54c307f1`): a numeric index is accepted only for `T[]`, `List<T>` and `IReadOnlyList<T>` with scalar `T` (`string`, `int`, `TimeSpan`, enum). An index on a non-collection is still rejected as an unknown setting. Element values are validated by type and never echoed. No `OutgoingMessage.Attempt`, no `DestinationFault.RetryAfter` in v1.
 
 ## Requirements
 
@@ -323,7 +323,7 @@ Both hooks in v1, host code only, registered by name. Image registers none. A ma
 ## Non-Functional Requirements
 
 ### Code Architecture and Modularity
-- Package depends on Core only. Only Core change: dead-letter header name constants (Req12 AC4). No other Core change.
+- Package depends on Core only. Only Core changes: dead-letter header name constants (Req12 AC4) and `RelayOptionsBinder` array-index support (foreman ruling 2026-11-26, `msg_016c54c307f1`): a numeric index is accepted only for `T[]`, `List<T>` and `IReadOnlyList<T>` with scalar `T` (`string`, `int`, `TimeSpan`, enum). An index on a non-collection is still rejected as an unknown setting. Element values are validated by type and never echoed. No other Core change.
 - Precompiled URL/header plans built at startup, immutable, shared across sends.
 
 ### Performance

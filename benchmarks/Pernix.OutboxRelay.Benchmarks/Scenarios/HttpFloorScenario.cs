@@ -224,7 +224,7 @@ internal static class HttpFloorScenario
                 return StaticUri;
             }
 
-                var buffer = urlBuffer ??= new char[256];
+            var buffer = urlBuffer ??= new char[256];
             const string Prefix = $"http://{HttpLoopback.Host}/orders/";
             Prefix.CopyTo(buffer);
             message.Source.Id.TryFormat(buffer.AsSpan(Prefix.Length), out var written, provider: CultureInfo.InvariantCulture);
