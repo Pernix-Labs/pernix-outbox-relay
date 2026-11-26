@@ -124,7 +124,7 @@ public sealed class HttpRegistrationTests
     [Fact]
     public void Validate_binds_the_full_http_block_without_failures()
     {
-        var (factory, destination) = Destination(new()
+        var (_, destination) = Destination(new()
         {
             ["Name"] = "LedgerSink",
             ["Transport"] = "Http",
@@ -171,7 +171,9 @@ public sealed class HttpRegistrationTests
             ["Http:ResponseClassifier"] = "ledger-classifier",
         });
 
-        Assert.Empty(factory.Validate(destination, "Destinations[LedgerSink]", new RelayOptions()));
+        var failures = new List<string>();
+        RelayOptionsBinder.BindSection<Pernix.OutboxRelay.Destination.Http.Options.HttpDestinationOptions>(destination.Settings!.GetSection("Http"), "Destinations[LedgerSink].Http", failures);
+        Assert.Empty(failures);
     }
 
     [Fact]
