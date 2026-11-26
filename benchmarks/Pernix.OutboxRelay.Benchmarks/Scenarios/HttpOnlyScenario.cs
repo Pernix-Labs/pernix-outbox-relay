@@ -94,6 +94,13 @@ internal static class HttpOnlyScenario
                 return Measurement.Of(name, round, reported, sends, unit, start, end);
             });
 
+        // Retained after the run: full blocking GC, then heap and process working set.
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+        Console.WriteLine(
+            $"retained heap {GC.GetGCMemoryInfo(GCKind.FullBlocking).HeapSizeBytes / 1024.0:N0} KB, working set {Environment.WorkingSet / 1048576.0:N1} MB");
+
         if (loopback is not null)
         {
             // C6: no connection growth after warm-up, connects <= MaxRequestsInFlight.

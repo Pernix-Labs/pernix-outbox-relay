@@ -1228,3 +1228,49 @@ Templated full stack: `http None w500 h1 tpl` − static = +373.6 B. Beyond the 
 h0 / h4 move by the same amounts (None w500 h0 1,942.5, Strict w1 h0 1,567.4). Per type (`--profile`, None w500 h1): `StateMachineBox<DeliveryResult, HttpDestination.<SendAsync>>` ~332 B/msg, `HttpConnection.SendAsync` box ~262, `HttpConnectionPool.SendWithVersionDetectionAndRetryAsync` box ~223. Strict w1: no `HttpDestination` box, the two framework boxes ~160 + ~117.
 
 **Miss: O9 (own state machine, target 0) holds only in-memory.** On a real socket, reads complete asynchronously, so every send suspends and needs a box. At w1 the `PoolingAsyncValueTaskMethodBuilder` cache returns the one box in use, and the relay allocates 0. At w500 up to 500 sends are suspended at once, more than that builder's small per-thread and per-core cache holds, so ~332 B/msg of relay-owned boxes are allocated. The in-memory loopback hides this. The relay-owned targets above are met for the loopback and stub cells they are defined on. The framework boxes on the socket path (~385-485 B/msg) are framework floor. No `AllocationCeilings` change.
+
+### O9 real-socket spike
+
+Foreman ruling O1 (bounded): can `DOTNET_SYSTEM_THREADING_POOLINGASYNCVALUETASKSCACHESIZE` or flattening `HttpDestination.SendAsync` remove the ~332 B/msg `StateMachineBox` of the real-socket w500 cell above? Result: **GAP**. Neither removes it.
+
+| Item | Value |
+|---|---|
+| Code | `30eebc3` on `avataraps/spec-http-destination` + a harness line that prints retained heap and working set after each `http` cell (full blocking compacting GC, `GCMemoryInfo.HeapSizeBytes`, `Environment.WorkingSet`) |
+| Date | 2026-11-26, 21:51-21:55 UTC |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1, arm64, .NET 10.0.15, Release, workstation non-concurrent GC |
+| Other | `otel=False`. **The machine was not idle** (1-minute load average 8-30, 5-minute 37-49). Rates are not usable for small differences. B/msg repeated to 0.1 B across all runs |
+
+Commands (repo root), each 3 times unprofiled and 3 times with `--profile`, per setting `unset`, `64`, `256`, `512`:
+
+```sh
+DOTNET_SYSTEM_THREADING_POOLINGASYNCVALUETASKSCACHESIZE=<n> \
+  dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http --socket --modes None,Strict --headers 1 --urls static [--profile]
+```
+
+#### The knob does not exist in .NET 10
+
+- The .NET 10 builder reads no configuration. `PoolingAsyncValueTaskMethodBuilderT.cs` on `release/10.0` (dotnet/runtime, last product change `53af66a48`, 2023-06-05) holds a fixed cache per state machine type: one box per thread (`[ThreadStatic] t_tlsCache`, "This currently only ever stores one") and one box per core (`s_perCoreCache = new PaddedReference[Environment.ProcessorCount]`). There is no `AppContext` switch, no runtimeconfig property and no environment read.
+- `System.Private.CoreLib.dll` 10.0.15 on this machine contains no `POOLINGASYNC` string (UTF-16 scan of the binary).
+- The only reference in dotnet/runtime is `PoolingAsyncValueTaskMethodBuilderTests.cs`, which still sets the variable on a remote process. That is a leftover from the .NET 6 preview builder (configurable `s_maxCacheSize`), which the .NET 6 release replaced with the fixed per-thread + per-core cache.
+- On this machine the cache holds at most 12 + (threads) boxes. 500 suspended sends always overflow it.
+
+#### Knob measurements (median of 3, h1 static 200)
+
+| Setting | None w500 B/msg | `HttpDestination` box ~B/msg (sampled) | None w500 msg/s | None retained heap KB | None working set MB | Strict w1 B/msg | Strict w1 msg/s | Strict retained heap KB |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| unset | 2,030.5 | 356.5 | 166,353 | 1,368 | 87.2 | 1,656.0 | 28,438 | 356 |
+| 64 | 2,030.5 | 349.6 | 171,856 | 1,379 | 87.2 | 1,655.9 | 26,710 | 370 |
+| 256 | 2,030.4 | 355.5 | 162,676 | 1,377 | 86.7 | 1,656.0 | 27,111 | 367 |
+| 512 | 2,030.5 | 321.4 | 171,034 | 1,368 | 86.7 | 1,656.0 | 29,581 | 355 |
+
+- B/msg is equal to 0.1 B across all four settings, and equal to the 30eebc3 run (2,030.5 / 1,655.4). Retained heap and working set do not move beyond run noise. The knob is a no-op, as the source says.
+- The box figure is `GCAllocationTick` sampled (±~10% at a 15-17% share). All 12 profiled runs: 316.5-362.4, median 348.6 B/msg. The per-setting spread is sampling noise, not a trend (512 is lowest, 64 is not).
+- Strict w1: no `HttpDestination` box in any profile, as before.
+
+#### Flatten
+
+Not changed. `SendAsync` is already one relay state machine on the static path: `HttpSendGate.AcquireAsync` returns a `ValueTask` backed by the gate's own `IValueTaskSource` (no box), and the other async methods (`ReadMappedBodyAsync`, `ClassifyAsync`) run only with a request mapper with signing or a response classifier. The sync fast path already exists: an `async ValueTask` method that completes without suspending allocates no box, which is why the in-memory and stub cells show 0 B. On a real socket `invoker.SendAsync` completes asynchronously, so the send must suspend and needs a box. No flattening removes that suspension. `HttpDestination.cs` is unchanged.
+
+#### Decision
+
+**GAP.** No product or Host runtimeconfig change. Residual relay-owned bytes on `http socket None w500 h1 static 200`: **~350 B/msg** (sampled median 348.6, range 316-362), the `StateMachineBox<DeliveryResult, HttpDestination.<SendAsync>>` of each suspended send beyond the fixed builder cache. `Strict w1` relay-owned: 0 B. Totals that ship: None w500 h1 2,030.5 B/msg, Strict w1 h1 1,656.0 B/msg. `dotnet test --project tests/Pernix.OutboxRelay.Unit.Tests --filter-namespace Pernix.OutboxRelay.Unit.Tests.Http`: 523 passed, 0 failed. No `AllocationCeilings` change.
