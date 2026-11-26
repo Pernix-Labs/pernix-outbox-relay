@@ -9,7 +9,7 @@ namespace Pernix.OutboxRelay.Destination.Http;
 
 public static class HttpDestinationServiceCollectionExtensions
 {
-    public static IServiceCollection AddHttpDestination(this IServiceCollection services)
+    public static IServiceCollection AddHttpDestination(this IServiceCollection services, Action<HttpDestinationBuilder>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -17,16 +17,18 @@ public static class HttpDestinationServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRelaySectionValidator, HttpCredentialSection>(
             sp => sp.GetRequiredService<HttpCredentialSection>()));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDestinationFactory, HttpDestinationFactory>(
-            sp => new HttpDestinationFactory(sp.GetRequiredService<ILoggerFactory>(), sp.GetRequiredService<HttpCredentialSection>())));
+            sp => new HttpDestinationFactory(
+                sp.GetRequiredService<ILoggerFactory>(), sp.GetRequiredService<HttpCredentialSection>(), HttpHooks.From(sp))));
+        configure?.Invoke(new HttpDestinationBuilder(services));
         return services;
     }
 
-    public static TBuilder AddHttpDestination<TBuilder>(this TBuilder builder)
+    public static TBuilder AddHttpDestination<TBuilder>(this TBuilder builder, Action<HttpDestinationBuilder>? configure = null)
         where TBuilder : IHostApplicationBuilder
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Services.AddHttpDestination();
+        builder.Services.AddHttpDestination(configure);
         return builder;
     }
 }

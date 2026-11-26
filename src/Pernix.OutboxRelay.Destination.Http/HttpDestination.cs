@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Security.Authentication;
@@ -10,6 +11,7 @@ internal sealed class HttpDestination : IDestination
 {
     private const string ContentTypeHeader = "Content-Type";
     private const int Unauthorized = 401;
+    internal const int BodyPrefixSize = 4096;
 
     private static readonly UriCreationOptions RenderedUri = new() { DangerousDisablePathAndQueryCanonicalization = true };
 
@@ -22,6 +24,8 @@ internal sealed class HttpDestination : IDestination
     private readonly ILogger logger;
     private readonly TimeProvider time;
     private readonly DeliveryResult timeoutFault;
+    private readonly IHttpRequestMapper? mapper;
+    private readonly IHttpResponseClassifier? classifier;
 
     // Indexed by slot: the case-duplicate set HeaderForwarding reuses for rows with many headers.
     private readonly HashSet<string>?[] seenBySlot;
@@ -32,7 +36,9 @@ internal sealed class HttpDestination : IDestination
         DestinationContext context,
         ILogger logger,
         Func<HandlerSettings, HttpMessageHandler>? handlers = null,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        IHttpRequestMapper? mapper = null,
+        IHttpResponseClassifier? classifier = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(context);
@@ -40,6 +46,8 @@ internal sealed class HttpDestination : IDestination
 
         this.plan = plan;
         this.logger = logger;
+        this.mapper = mapper;
+        this.classifier = classifier;
         this.time = time ?? TimeProvider.System;
         probe = context.IsProbe;
         timeoutFault = new DeliveryResult.DestinationFault($"timeout after {plan.SendTimeout}");
@@ -144,6 +152,11 @@ internal sealed class HttpDestination : IDestination
                 return headerFault;
             }
 
+            if (mapper is not null && Map(message, request) is { } mapped)
+            {
+                return mapped;
+            }
+
             // Relay-owned headers go last and win.
             string? token = null;
             if (plan.Auth.TokenCache is { } tokens)
@@ -175,7 +188,13 @@ internal sealed class HttpDestination : IDestination
                     return idFault;
                 }
 
-                if (!signer.TrySign(request, message.Payload, row, out var signFault, webhookId))
+                // A mapper may replace the content: sign the bytes that are sent.
+                var body = ReferenceEquals(request.Content, content)
+                    ? message.Payload
+                    : request.Content is { } mappedContent
+                        ? await mappedContent.ReadAsByteArrayAsync(deadline).ConfigureAwait(false)
+                        : [];
+                if (!signer.TrySign(request, body, row, out var signFault, webhookId))
                 {
                     return signFault;
                 }
@@ -186,6 +205,11 @@ internal sealed class HttpDestination : IDestination
             if (status == Unauthorized && token is not null)
             {
                 plan.Auth.TokenCache!.Invalidate(token);
+            }
+
+            if (classifier is not null)
+            {
+                return await ClassifyAsync(response, deadline).ConfigureAwait(false);
             }
 
             // The body is never read: disposal drains it up to MaxResponseDrainSize so the connection is reused.
@@ -238,6 +262,57 @@ internal sealed class HttpDestination : IDestination
         }
 
         return ValueTask.CompletedTask;
+    }
+
+    // Hook faults name the hook and the exception type, never the message (it may carry row data).
+    private DeliveryResult? Map(OutgoingMessage message, HttpRequestMessage request)
+    {
+        try
+        {
+            return mapper!.Map(message, request);
+        }
+        catch (Exception exception)
+        {
+            return new DeliveryResult.DestinationFault($"{exception.GetType().Name} in request mapper '{plan.RequestMapper}'");
+        }
+    }
+
+    private async ValueTask<DeliveryResult> ClassifyAsync(HttpResponseMessage response, CancellationToken deadline)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(BodyPrefixSize);
+        try
+        {
+            var length = 0;
+            var stream = await response.Content.ReadAsStreamAsync(deadline).ConfigureAwait(false);
+            await using (stream.ConfigureAwait(false))
+            {
+                int read;
+                while (length < BodyPrefixSize
+                       && (read = await stream.ReadAsync(buffer.AsMemory(length, BodyPrefixSize - length), deadline).ConfigureAwait(false)) > 0)
+                {
+                    length += read;
+                }
+            }
+
+            return Classify(response, buffer.AsSpan(0, length));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private DeliveryResult Classify(HttpResponseMessage response, ReadOnlySpan<byte> bodyPrefix)
+    {
+        try
+        {
+            return classifier!.Classify(response, bodyPrefix)
+                   ?? new DeliveryResult.DestinationFault($"no result from response classifier '{plan.ResponseClassifier}'");
+        }
+        catch (Exception exception)
+        {
+            return new DeliveryResult.DestinationFault($"{exception.GetType().Name} in response classifier '{plan.ResponseClassifier}'");
+        }
     }
 
     private HttpSendSlot CreateSlot(int index) =>

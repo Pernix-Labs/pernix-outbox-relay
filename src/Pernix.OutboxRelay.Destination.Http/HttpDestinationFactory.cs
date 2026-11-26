@@ -14,12 +14,17 @@ public sealed class HttpDestinationFactory : IDestinationFactory
     private readonly ILoggerFactory loggerFactory;
     private readonly ILogger logger;
     private readonly HttpCredentialSection credentials;
-    private readonly HttpHookLookup hooks;
+    private readonly HttpHooks hooks;
     private readonly Func<HandlerSettings, HttpMessageHandler>? handlers;
     private readonly TimeProvider? time;
 
     internal HttpDestinationFactory(ILoggerFactory loggerFactory, HttpCredentialSection credentials)
-        : this(loggerFactory, credentials, HttpHookLookup.None)
+        : this(loggerFactory, credentials, HttpHooks.None)
+    {
+    }
+
+    internal HttpDestinationFactory(ILoggerFactory loggerFactory, HttpCredentialSection credentials, HttpHooks hooks)
+        : this(loggerFactory, credentials, hooks, null, null)
     {
     }
 
@@ -30,6 +35,16 @@ public sealed class HttpDestinationFactory : IDestinationFactory
         HttpHookLookup hooks,
         Func<HandlerSettings, HttpMessageHandler>? handlers = null,
         TimeProvider? time = null)
+        : this(loggerFactory, credentials, HttpHooks.From(hooks ?? throw new ArgumentNullException(nameof(hooks))), handlers, time)
+    {
+    }
+
+    internal HttpDestinationFactory(
+        ILoggerFactory loggerFactory,
+        HttpCredentialSection credentials,
+        HttpHooks hooks,
+        Func<HandlerSettings, HttpMessageHandler>? handlers,
+        TimeProvider? time)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentNullException.ThrowIfNull(credentials);
@@ -77,7 +92,7 @@ public sealed class HttpDestinationFactory : IDestinationFactory
             .ToArray();
 
         var compileFailures = new List<string>();
-        var plan = HttpPlanCompiler.Compile(http, name, ownPath, outboxes, credentials, hooks, CreateTokenCache, compileFailures);
+        var plan = HttpPlanCompiler.Compile(http, name, ownPath, outboxes, credentials, hooks.Lookup, CreateTokenCache, compileFailures);
 
         // A rejected value falls back to its default: rules on that key, and scheme-dependent rules under a
         // rejected Scheme, would report a failure the operator did not cause.
@@ -133,7 +148,13 @@ public sealed class HttpDestinationFactory : IDestinationFactory
             throw new InvalidOperationException($"Destination '{destination.Name}' was not validated by the Http transport.");
         }
 
-        return new HttpDestination(plan, context, loggerFactory.CreateLogger<HttpDestination>(), handlers, time);
+        var mapper = plan.RequestMapper is { } mapperName
+            ? hooks.Mapper(mapperName) ?? throw new InvalidOperationException($"Destinations[{name}]: request mapper '{mapperName}' is not registered.")
+            : null;
+        var classifier = plan.ResponseClassifier is { } classifierName
+            ? hooks.Classifier(classifierName) ?? throw new InvalidOperationException($"Destinations[{name}]: response classifier '{classifierName}' is not registered.")
+            : null;
+        return new HttpDestination(plan, context, loggerFactory.CreateLogger<HttpDestination>(), handlers, time, mapper, classifier);
     }
 
     internal HttpDestinationPlan PlanOf(string destination) => resolved[destination];
