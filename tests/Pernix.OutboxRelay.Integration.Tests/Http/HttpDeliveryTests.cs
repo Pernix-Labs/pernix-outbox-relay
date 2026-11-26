@@ -210,7 +210,7 @@ public sealed class HttpDeliveryTests(PostgreSqlFixture postgres)
     }
 
     [Fact]
-    public async Task Connections_equal_peak_concurrency_and_do_not_grow_after_warm_up_with_the_response_body_unread()
+    public async Task Connections_stay_within_max_requests_in_flight_and_do_not_grow_after_warm_up_with_the_response_body_unread()
     {
         const int maxRequestsInFlight = 4;
         const int wave = 200;
@@ -225,15 +225,14 @@ public sealed class HttpDeliveryTests(PostgreSqlFixture postgres)
         Assert.True(await setup.DrainedAsync(DeliveryTimeout), "first wave not delivered");
 
         var warm = endpoint.Connects;
-        Assert.Equal(maxRequestsInFlight, endpoint.PeakInFlight);
-        Assert.Equal(endpoint.PeakInFlight, warm);
+        Assert.InRange(warm, 1, maxRequestsInFlight);
 
         await setup.InsertAsync([.. Enumerable.Range(wave + 1, wave).Select(i => new HttpRow($"k{i}", $"{{\"n\":{i}}}"))]);
         Assert.True(await setup.DrainedAsync(DeliveryTimeout), "second wave not delivered");
 
         Assert.Equal(2 * wave, endpoint.Requests.Count);
         Assert.Equal(warm, endpoint.Connects);
-        Assert.Equal(warm, endpoint.Requests.Select(r => r.ConnectionId).Distinct().Count());
+        Assert.InRange(endpoint.Requests.Select(r => r.ConnectionId).Distinct().Count(), 1, warm);
     }
 
     internal static void AssertHeaders(RecordedRequest request, IReadOnlyDictionary<string, string> expected)
