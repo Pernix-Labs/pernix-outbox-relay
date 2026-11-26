@@ -1128,3 +1128,103 @@ Every cell passes: connects after warm-up = connects at the end, so an unread 10
 
 - **macOS proxy lookup.** With `UseProxy` default, `SocketsHttpHandler` on macOS asks the system proxy configuration per request: ~524 B/req (CF handles + strings) of the 1,848.1. A one-off run with `UseProxy = false` (not committed) measured 1,319.9 B/req for None h1 static, −539.4 B, at ~3.4× the rate. This is outside relay code, and Linux uses `HttpEnvironmentProxy` instead. The OS a guard ceiling is set on matters.
 - No `AllocationCeilings` change.
+
+### Package cells: method (task 16)
+
+The cells below run the real `Pernix.OutboxRelay.Destination.Http` package. `Infrastructure/HttpMock.cs` builds each `HttpDestination` through `HttpDestinationFactory.Validate` then `Create`, with the production `HttpHandlerFactory.Create` handler (env-only `UseProxy`, so no macOS proxy lookup) and `Infrastructure/HttpLoopback.cs` behind `ConnectCallback`. `Infrastructure/HttpStub.cs` replaces the handler with one preallocated `HttpResponseMessage`, so a stub cell holds only relay-owned bytes and the request objects the relay must build. Response is the C6 `200` unless the cell says `204`.
+
+| Item | Value |
+|---|---|
+| Code | `1c9f8e6` on `avataraps/spec-http-destination` + the task 16 harness changes |
+| Date | 2026-11-26, 21:30-21:45 UTC |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1, arm64, .NET 10.0.15, Release, workstation non-concurrent GC |
+| Other | `otel=False`. **The machine was not idle** (load average 7-20, a 103 5-minute peak at 21:43). Rates are not usable. B/msg repeated to 0.1 B across two full runs |
+
+Commands (repo root):
+
+```sh
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http --response 204
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http --modes None --headers 1 --urls tpl
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-dlq
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-stub
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- term --modes None,PerKey,Strict --dests http
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- term --modes None --dests http-tpl,http-sat,http-dlq
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- idle --modes None --dests http --seconds 30
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http --socket
+# per-type tables: the same cells with --modes None --headers 1 --profile
+```
+
+Each figure is the `reported` round (3 of 3). `term` dests: `http` static URL, `http-tpl` URL `/orders/{id}?key={key}`, `http-sat` `MaxRequestsInFlight` 8, `http-dlq` `PermanentFaultDestination` main with an Http dead letter. `http` and `http-sat` run the default `MaxRequestsInFlight` 64 and 8 against term batch 500.
+
+### Package cells: destination only (B/msg)
+
+| Cell | h0 | h1 | h4 |
+|---|---:|---:|---:|
+| http None w500 static | 1,224.0 | **1,312.0** | 1,312.0 |
+| http PerKey w500 static | 1,224.0 | 1,312.0 | 1,312.0 |
+| http Strict w1 static | 1,224.0 | 1,312.0 | 1,312.0 |
+| http None w500 static 204 | 880.0 | 968.0 | 968.0 |
+| http PerKey w500 static 204 | 880.0 | 968.0 | 968.0 |
+| http Strict w1 static 204 | 880.0 | 968.0 | 968.0 |
+| http None w500 tpl | | 1,685.6 | |
+| http-dlq None w500 static (B/dlq-msg) | 1,548.9 | 1,548.9 | 1,828.9 |
+| http-dlq PerKey w500 static (B/dlq-msg) | 1,548.9 | 1,548.9 | 1,828.9 |
+| http-dlq Strict w1 static (B/dlq-msg) | 1,536.0 | 1,536.0 | 1,816.0 |
+| http-stub None w500 static | 336.0 | **424.0** | 424.0 |
+| http-stub PerKey w500 static | 336.0 | 424.0 | 424.0 |
+| http-stub Strict w1 static | 336.0 | 424.0 | 424.0 |
+| http-stub None w500 tpl | 501.8 | 589.8 | 589.8 |
+| http-stub PerKey w500 tpl | 501.8 | 589.8 | 589.8 |
+| http-stub Strict w1 tpl | 496.0 | 584.0 | 584.0 |
+| http-stub-dlq None w500 static (B/dlq-msg) | 660.9 | 660.9 | 940.9 |
+| http-stub-dlq PerKey w500 static (B/dlq-msg) | 660.9 | 660.9 | 940.9 |
+| http-stub-dlq Strict w1 static (B/dlq-msg) | 648.0 | 648.0 | 928.0 |
+
+- `http None w500 h1` 1,312.0 vs the spike's hand-written floor with `UseProxy = false` 1,319.9: the package adds no bytes over the floor it was designed against. Budget estimate for the framework floor was 1,380-2,180.
+- h4 = h1 on the main path: 4 forwarded headers fit the first `HeaderEntry[]`. On the dead-letter path the 6 dead-letter headers + 4 forwarded overflow it twice (+280.0 B, a 16-entry `HeaderEntry[]`).
+- Connects (C6): every loopback cell has no growth after warm-up, 1-22 connections at w500 (limit 64), 1 at w1.
+
+### Package cells: term (B/msg)
+
+| Cell | B/msg |
+|---|---:|
+| term None http b500 h1 | **1,504.8** |
+| term PerKey http b500 h1 | 1,504.9 |
+| term Strict http b500 h1 | 1,504.9 |
+| term None http-tpl b500 h1 | 1,888.0 |
+| term None http-sat b500 h1 | 1,504.8 |
+| term None http-dlq b500 h1 (B/dlq-msg) | 2,000.8 |
+| idle None http interval 1s (B/s, rounds 548.3 / 147.5 / 97.9) | 97.9 |
+
+- term − destination-only = 192.8 B/msg, the Core term loop (Kafka term loop share 192-213).
+- `http-sat` = `http` to 0.1 B: a contended gate (8 slots, 500 sends) allocates nothing.
+- `idle` is in the range of `null` 57.1 and `kafka` 95.2 (2026-11-24), with a noisy first round on a loaded machine.
+- Kafka `term None dlq b500 h1` after the `TermHost` change: 919.4 B/dlq-msg vs 895.4 on 2026-11-24 (spread 10.7). Same `DeadLetterTarget` wiring as before, the difference is run noise on a loaded machine.
+
+### Relay-owned bytes vs design targets
+
+Relay-owned = bytes allocated by `Pernix.OutboxRelay.Destination.Http` code. No `Pernix.OutboxRelay.Destination.Http` type appears in any `--profile` table of the loopback and stub cells (`http`, `http-dlq`, `http-stub`, `term http`, `http-tpl`, `http-sat`). The remaining relay-owned bytes are strings it renders, separated by stub deltas.
+
+| Cell | Measured relay-owned | Target | Result |
+|---|---:|---|---|
+| static, `http-stub None w500 h1 static` | 0 B. The 424.0 B are the request objects: `HeaderEntry[]` 175.9 (request + content, 88 each), `HttpRequestMessage` 72.5, `ReadOnlyMemoryContent` 63.4, `HttpContentHeaders` 62.9, `HttpRequestHeaders` 49.6 (sampled) | ≤ 64 B | met |
+| saturated, `term None http-sat b500 h1` | 0 B. Equal to `term None http` (1,504.8), no relay type in the profile | ≤ 64 B | met |
+| templated, `http-stub None w500 h1 tpl` | URL string only (~110 B, sampled `String` 111.9). Delta vs static 165.8 B = that string + `Uri` 51.7 (framework, C3) | ≤ 64 B + URL string | met (0 B beyond the URL string) |
+| dlq, `http-stub-dlq None w500 h1 static` | 84.9 B/dlq-msg: `x-failed-at` string 72 B + `x-original-id` string 12.9 B average (ids ≥ 300 only, .NET caches smaller ones; `Strict` w1 sends id 1 and shows 72 B). The other 152.0 B of the 236.9 B delta vs `http-stub` is the 8-entry request `HeaderEntry[]` that 6 dead-letter + 1 forwarded headers need (framework) | ≤ 192 B | met |
+
+Templated full stack: `http None w500 h1 tpl` − static = +373.6 B. Beyond the relay's URL string and `Uri`, the handler allocates per non-shared `Uri` (`UriInfo`, request-line strings), as in the spike (+406.3).
+
+### Real-socket evidence run
+
+`http --socket` starts this harness as a child process (`http-server`), which serves the same fake through a `TcpListener` on `127.0.0.1`. The parent uses the production handler with no `ConnectCallback`. Child allocations are outside the measured process.
+
+| Cell (h1, static, 200) | In-memory | Real socket | Delta |
+|---|---:|---:|---:|
+| http None w500 | 1,312.0 | 2,030.5 | +718.5 |
+| http PerKey w500 | 1,312.0 | 2,030.4 | +718.4 |
+| http Strict w1 | 1,312.0 | 1,655.4 | +343.4 |
+
+h0 / h4 move by the same amounts (None w500 h0 1,942.5, Strict w1 h0 1,567.4). Per type (`--profile`, None w500 h1): `StateMachineBox<DeliveryResult, HttpDestination.<SendAsync>>` ~332 B/msg, `HttpConnection.SendAsync` box ~262, `HttpConnectionPool.SendWithVersionDetectionAndRetryAsync` box ~223. Strict w1: no `HttpDestination` box, the two framework boxes ~160 + ~117.
+
+**Miss: O9 (own state machine, target 0) holds only in-memory.** On a real socket, reads complete asynchronously, so every send suspends and needs a box. At w1 the `PoolingAsyncValueTaskMethodBuilder` cache returns the one box in use, and the relay allocates 0. At w500 up to 500 sends are suspended at once, more than that builder's small per-thread and per-core cache holds, so ~332 B/msg of relay-owned boxes are allocated. The in-memory loopback hides this. The relay-owned targets above are met for the loopback and stub cells they are defined on. The framework boxes on the socket path (~385-485 B/msg) are framework floor. No `AllocationCeilings` change.

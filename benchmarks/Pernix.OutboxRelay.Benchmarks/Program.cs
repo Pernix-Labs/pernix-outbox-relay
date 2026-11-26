@@ -27,6 +27,13 @@ try
         return 0;
     }
 
+    // Child of `http --socket`: the loopback server on a real socket.
+    if (verb == "http-server")
+    {
+        await HttpLoopback.ServeAsync(HarnessOptions.Parse("http", rest).Response);
+        return 0;
+    }
+
     HarnessOptions options;
     try
     {
@@ -116,6 +123,15 @@ internal static class Verbs
                 break;
             case "http-floor":
                 await TimedAsync("http-floor", HttpFloorScenario.RunAsync, options);
+                break;
+            case "http":
+                await TimedAsync(options.Socket ? "http socket" : "http", HttpOnlyScenario.RunAsync, options);
+                break;
+            case "http-dlq":
+                await TimedAsync("http-dlq", HttpOnlyScenario.DeadLetterAsync, options);
+                break;
+            case "http-stub":
+                await TimedAsync("http-stub", HttpOnlyScenario.StubAsync, options);
                 break;
             case "flat":
                 await FlatAsync(options);

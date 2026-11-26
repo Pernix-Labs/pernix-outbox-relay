@@ -19,7 +19,7 @@ internal static class TermHost
     public static readonly TimeSpan IdleInterval = new PollingOptions().Interval;
 
     public static DeliveryTerm Create(
-        OrderingMode mode, Func<IDestination> createDestination, TimeSpan interval, int batchSize = BatchSize, bool deadLetter = false)
+        OrderingMode mode, Func<IDestination> createDestination, TimeSpan interval, int batchSize = BatchSize, DeadLetterTarget? deadLetter = null)
     {
         var options = new OutboxOptions
         {
@@ -29,11 +29,9 @@ internal static class TermHost
             Ordering = new OrderingOptions { Mode = mode },
         };
 
-        DeadLetterTarget? target = null;
-        if (deadLetter)
+        if (deadLetter is not null)
         {
-            options.DeadLetter = new DeadLetterOptions { Destination = KafkaMock.DeadLetterName };
-            target = new DeadLetterTarget(KafkaMock.DeadLetterName, () => KafkaMock.CreateDeadLetter(mode));
+            options.DeadLetter = new DeadLetterOptions { Destination = deadLetter.DestinationName };
         }
 
         IDeliveryOrdering ordering = mode switch
@@ -52,6 +50,6 @@ internal static class TermHost
             new OutboxRuntimeStatus(Workload.Outbox),
             TimeProvider.System,
             NullLogger.Instance,
-            target);
+            deadLetter);
     }
 }

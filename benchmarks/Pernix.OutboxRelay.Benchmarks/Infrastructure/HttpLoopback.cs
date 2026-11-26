@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks.Sources;
 
@@ -38,6 +42,78 @@ internal sealed class HttpLoopback
     {
         Interlocked.Increment(ref connects);
         return new LoopbackStream(this);
+    }
+
+    // Child-process side of the real-socket run: each accepted socket is pumped through one fake stream. Ends at stdin EOF.
+    public static async Task ServeAsync(int status)
+    {
+        var server = new HttpLoopback(status);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        using var stop = new CancellationTokenSource();
+        Console.WriteLine($"port {((IPEndPoint)listener.LocalEndpoint).Port}");
+        Console.Out.Flush();
+        _ = Task.Run(async () =>
+        {
+            while (await Console.In.ReadLineAsync() is not null)
+            {
+            }
+
+            await stop.CancelAsync();
+        });
+
+        try
+        {
+            while (true)
+            {
+                var socket = await listener.AcceptSocketAsync(stop.Token);
+                socket.NoDelay = true;
+                _ = PumpAsync(server, socket);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private static async Task PumpAsync(HttpLoopback server, Socket socket)
+    {
+        await using var network = new NetworkStream(socket, ownsSocket: true);
+        var fake = server.Open();
+        var responses = Task.Run(async () =>
+        {
+            var buffer = new byte[16 * 1024];
+            int n;
+            while ((n = await fake.ReadAsync(buffer)) > 0)
+            {
+                await network.WriteAsync(buffer.AsMemory(0, n));
+            }
+        });
+
+        try
+        {
+            var buffer = new byte[16 * 1024];
+            int n;
+            while ((n = await network.ReadAsync(buffer)) > 0)
+            {
+                fake.Write(buffer.AsSpan(0, n));
+            }
+        }
+        catch (IOException)
+        {
+        }
+        finally
+        {
+            await fake.DisposeAsync();
+        }
+
+        try
+        {
+            await responses;
+        }
+        catch (IOException)
+        {
+        }
     }
 
     private void Started()
@@ -339,5 +415,73 @@ internal sealed class HttpLoopback
 
             return 0;
         }
+    }
+}
+
+// Parent side: runs this harness as `http-server` and reads the port it listens on.
+internal sealed class LoopbackProcess : IAsyncDisposable
+{
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(5);
+    private readonly Process process;
+
+    private LoopbackProcess(Process process, int port)
+    {
+        this.process = process;
+        Port = port;
+    }
+
+    public int Port { get; }
+
+    public static async Task<LoopbackProcess> StartAsync(int status)
+    {
+        var path = Environment.ProcessPath ?? throw new InvalidOperationException("http-server: no process path");
+        var info = new ProcessStartInfo(path)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        if (Path.GetFileNameWithoutExtension(path) == "dotnet")
+        {
+            info.ArgumentList.Add(typeof(LoopbackProcess).Assembly.Location);
+        }
+
+        info.ArgumentList.Add("http-server");
+        info.ArgumentList.Add("--response");
+        info.ArgumentList.Add(status.ToString(CultureInfo.InvariantCulture));
+        var process = Process.Start(info) ?? throw new InvalidOperationException("http-server: process did not start");
+        try
+        {
+            var line = await process.StandardOutput.ReadLineAsync().WaitAsync(StartTimeout);
+            if (line is null || !line.StartsWith("port ", StringComparison.Ordinal)
+                || !int.TryParse(line.AsSpan(5), NumberStyles.None, CultureInfo.InvariantCulture, out var port))
+            {
+                throw new InvalidOperationException($"http-server: expected 'port <n>', got '{line}'");
+            }
+
+            return new LoopbackProcess(process, port);
+        }
+        catch
+        {
+            process.Kill();
+            process.Dispose();
+            throw;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        process.StandardInput.Close();
+        try
+        {
+            await process.WaitForExitAsync().WaitAsync(ExitTimeout);
+        }
+        catch (TimeoutException)
+        {
+            process.Kill();
+        }
+
+        process.Dispose();
     }
 }

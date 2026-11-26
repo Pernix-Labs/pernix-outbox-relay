@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Core\Pernix.OutboxRelay.Core.csproj" />
+    <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Destination.Http\Pernix.OutboxRelay.Destination.Http.csproj" />
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Destination.Kafka\Pernix.OutboxRelay.Destination.Kafka.csproj" />
     <ProjectReference Include="..\..\src\Pernix.OutboxRelay.Outbox.PostgreSql\Pernix.OutboxRelay.Outbox.PostgreSql.csproj" />
   </ItemGroup>
