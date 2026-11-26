@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography;
@@ -13,14 +14,16 @@ internal static class HttpHandlerFactory
     internal const int MaxResponseDrainSize = 64 * 1024;
 
     private static readonly Oid ServerAuthentication = new("1.3.6.1.5.5.7.3.1");
+    private static readonly string[] ProxyVariables = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY"];
 
-    public static SocketsHttpHandler Create(HandlerSettings settings)
+    public static SocketsHttpHandler Create(HandlerSettings settings, IDictionary? environment = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        // UseProxy stays true with Proxy null: HttpClient.DefaultProxy reads HTTPS_PROXY, HTTP_PROXY and NO_PROXY.
         var handler = new SocketsHttpHandler
         {
+            // The default system proxy is consulted per request (~539 B/req measured in task 1), so only env-configured proxies are used.
+            UseProxy = ProxyConfigured(environment ?? Environment.GetEnvironmentVariables()),
             AllowAutoRedirect = false,
             UseCookies = false,
             AutomaticDecompression = DecompressionMethods.None,
@@ -48,6 +51,23 @@ internal static class HttpHandlerFactory
         }
 
         return handler;
+    }
+
+    internal static bool ProxyConfigured(IDictionary environment)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+
+        foreach (DictionaryEntry variable in environment)
+        {
+            if (variable.Key is string name
+                && variable.Value is string { Length: > 0 }
+                && ProxyVariables.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     internal static bool ValidateAgainstRoots(

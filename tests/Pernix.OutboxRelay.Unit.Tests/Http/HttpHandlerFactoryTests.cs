@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -21,12 +22,12 @@ public sealed class HttpHandlerFactoryTests : IDisposable
     [Fact]
     public void Every_handler_setting_is_applied()
     {
-        using var handler = HttpHandlerFactory.Create(new HandlerSettings(TimeSpan.FromSeconds(3), 17, null));
+        using var handler = HttpHandlerFactory.Create(new HandlerSettings(TimeSpan.FromSeconds(3), 17, null), new Hashtable());
 
         Assert.False(handler.AllowAutoRedirect);
         Assert.False(handler.UseCookies);
         Assert.Equal(DecompressionMethods.None, handler.AutomaticDecompression);
-        Assert.True(handler.UseProxy);
+        Assert.False(handler.UseProxy);
         Assert.Null(handler.Proxy);
         Assert.Null(handler.ActivityHeadersPropagator);
         Assert.False(handler.PreAuthenticate);
@@ -40,6 +41,33 @@ public sealed class HttpHandlerFactoryTests : IDisposable
         Assert.True(handler.EnableMultipleHttp2Connections);
         Assert.Null(handler.SslOptions.RemoteCertificateValidationCallback);
         Assert.Null(handler.SslOptions.ClientCertificates);
+    }
+
+    [Theory]
+    [InlineData("HTTPS_PROXY")]
+    [InlineData("HTTP_PROXY")]
+    [InlineData("ALL_PROXY")]
+    [InlineData("https_proxy")]
+    [InlineData("http_proxy")]
+    [InlineData("all_proxy")]
+    [InlineData("Http_Proxy")]
+    public void Proxy_env_variable_enables_proxy(string name)
+    {
+        using var handler = HttpHandlerFactory.Create(
+            new HandlerSettings(TimeSpan.FromSeconds(1), 1, null), new Hashtable { [name] = "http://proxy.test:3128" });
+
+        Assert.True(handler.UseProxy);
+        Assert.Null(handler.Proxy);
+    }
+
+    [Fact]
+    public void Proxy_is_off_without_proxy_env_variable()
+    {
+        var environment = new Hashtable { ["NO_PROXY"] = "internal.test", ["HTTP_PROXY"] = "", ["PATH"] = "/usr/bin" };
+
+        using var handler = HttpHandlerFactory.Create(new HandlerSettings(TimeSpan.FromSeconds(1), 1, null), environment);
+
+        Assert.False(handler.UseProxy);
     }
 
     [Theory]
