@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Core.Configuration;
 using Pernix.OutboxRelay.Destination.Http;
@@ -122,58 +124,73 @@ public sealed class HttpRegistrationTests
     }
 
     [Fact]
-    public void Validate_binds_the_full_http_block_without_failures()
+    public void Validate_accepts_the_full_http_block_with_oauth2_hmac_pem_and_http2()
     {
-        var (_, destination) = Destination(new()
+        var directory = TempDirectory();
+        try
         {
-            ["Name"] = "LedgerSink",
-            ["Transport"] = "Http",
-            ["Http:Url"] = $"{Origin}/accounts/{{key:base64url}}/entries?source={{outbox}}",
-            ["Http:Method"] = "PUT",
-            ["Http:ContentType"] = "application/vnd.ledger.entry+json",
-            ["Http:Headers:Idempotency-Key"] = "{outbox}-{id}",
-            ["Http:ForwardHeaders:Mode"] = "listed",
-            ["Http:ForwardHeaders:Names:0"] = "traceparent",
-            ["Http:ForwardHeaders:Exclude:0"] = "cookie",
-            ["Http:ForwardHeaders:NamePrefix"] = "x-outbox-",
-            ["Http:StatusCodes:Delivered:0"] = "2xx",
-            ["Http:StatusCodes:Delivered:1"] = "409",
-            ["Http:StatusCodes:Rejected:0"] = "400",
-            ["Http:StatusCodes:Retried:0"] = "423",
-            ["Http:StatusCodes:Paused:0"] = "503",
-            ["Http:SendTimeout"] = "00:00:10",
-            ["Http:ConnectTimeout"] = "00:00:03",
-            ["Http:MaxRequestsInFlight"] = "16",
-            ["Http:HttpVersion"] = "2",
-            ["Http:Authentication:Scheme"] = "OAuth2ClientCredentials",
-            ["Http:Authentication:Credential"] = "Ledger",
-            ["Http:Authentication:HeaderName"] = "Authorization",
-            ["Http:Authentication:ValuePrefix"] = "Bearer ",
-            ["Http:Authentication:TokenUrl"] = $"{Origin}/token",
-            ["Http:Authentication:Scope"] = "ledger",
-            ["Http:Authentication:Audience"] = "ledger",
-            ["Http:Authentication:ClientCredentialsIn"] = "Body",
-            ["Http:Signing:Scheme"] = "HmacSha256",
-            ["Http:Signing:Credential"] = "LedgerSigning",
-            ["Http:Signing:HeaderName"] = "X-Signature",
-            ["Http:Signing:Encoding"] = "base64",
-            ["Http:Signing:ValuePrefix"] = "sha256=",
-            ["Http:Signing:WebhookId"] = "{outbox}-{id}",
-            ["Http:Tls:CaCertificatePath"] = "/etc/relay/tls/internal-ca.pem",
-            ["Http:Tls:ClientCertificate:CertificatePath"] = "/etc/relay/tls/client.crt",
-            ["Http:Tls:ClientCertificate:KeyPath"] = "/etc/relay/tls/client.key",
-            ["Http:Tls:ClientCertificate:PfxPath"] = "/etc/relay/tls/client.pfx",
-            ["Http:Tls:ClientCertificate:Credential"] = "LedgerTls",
-            ["Http:HealthProbe:Url"] = $"{Origin}/healthz",
-            ["Http:HealthProbe:Method"] = "GET",
-            ["Http:HealthProbe:Expected:0"] = "2xx",
-            ["Http:RequestMapper"] = "ledger-envelope",
-            ["Http:ResponseClassifier"] = "ledger-classifier",
-        });
+            var (certificate, key) = WritePem(directory, "client");
+            var (ca, _) = WritePem(directory, "ca");
+            var settings = FullSurface();
+            settings["Http:HttpVersion"] = "2";
+            settings["Http:Authentication:Scheme"] = "OAuth2ClientCredentials";
+            settings["Http:Authentication:Credential"] = "Ledger";
+            settings["Http:Authentication:TokenUrl"] = $"{Origin}/token";
+            settings["Http:Authentication:Scope"] = "ledger";
+            settings["Http:Authentication:Audience"] = "ledger";
+            settings["Http:Authentication:ClientCredentialsIn"] = "Body";
+            settings["Http:Signing:Scheme"] = "HmacSha256";
+            settings["Http:Signing:Credential"] = "LedgerSigning";
+            settings["Http:Signing:HeaderName"] = "X-Signature";
+            settings["Http:Signing:Encoding"] = "base64";
+            settings["Http:Signing:ValuePrefix"] = "sha256=";
+            settings["Http:Tls:CaCertificatePath"] = ca;
+            settings["Http:Tls:ClientCertificate:CertificatePath"] = certificate;
+            settings["Http:Tls:ClientCertificate:KeyPath"] = key;
+            settings["!HttpCredentials:Ledger:ClientId"] = "id";
+            settings["!HttpCredentials:Ledger:ClientSecret"] = "secret";
+            settings["!HttpCredentials:LedgerSigning:SigningSecret"] = "secret";
 
-        var failures = new List<string>();
-        RelayOptionsBinder.BindSection<Pernix.OutboxRelay.Destination.Http.Options.HttpDestinationOptions>(destination.Settings!.GetSection("Http"), "Destinations[LedgerSink].Http", failures);
-        Assert.Empty(failures);
+            var (factory, destination) = Destination(settings, Hooks);
+
+            Assert.Empty(factory.Validate(destination, "Destinations[LedgerSink]", new RelayOptions()));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Validate_accepts_the_full_http_block_with_api_key_standard_webhooks_and_pfx()
+    {
+        var directory = TempDirectory();
+        try
+        {
+            var pfx = WritePfx(directory, "client", "pw");
+            var settings = FullSurface();
+            settings["Http:HttpVersion"] = "1.1";
+            settings["Http:Authentication:Scheme"] = "ApiKey";
+            settings["Http:Authentication:Credential"] = "Ledger";
+            settings["Http:Authentication:HeaderName"] = "X-Api-Key";
+            settings["Http:Authentication:ValuePrefix"] = "Key ";
+            settings["Http:Signing:Scheme"] = "StandardWebhooks";
+            settings["Http:Signing:Credential"] = "LedgerSigning";
+            settings["Http:Signing:WebhookId"] = "{outbox}-{id}";
+            settings["Http:Tls:ClientCertificate:PfxPath"] = pfx;
+            settings["Http:Tls:ClientCertificate:Credential"] = "LedgerTls";
+            settings["!HttpCredentials:Ledger:ApiKey"] = "key";
+            settings["!HttpCredentials:LedgerSigning:SigningSecret"] = "whsec_" + Convert.ToBase64String(new byte[24]);
+            settings["!HttpCredentials:LedgerTls:CertificatePassword"] = "pw";
+
+            var (factory, destination) = Destination(settings, Hooks);
+
+            Assert.Empty(factory.Validate(destination, "Destinations[LedgerSink]", new RelayOptions()));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
@@ -238,14 +255,77 @@ public sealed class HttpRegistrationTests
         return host.Services.GetServices<IHostedService>().OfType<RelayStartupValidator>().Single();
     }
 
-    private static (HttpDestinationFactory Factory, DestinationOptions Destination) Destination(Dictionary<string, string?> settings)
+    private static readonly HttpHookLookup Hooks = new(n => n == "ledger-envelope", n => n == "ledger-classifier");
+
+    private static Dictionary<string, string?> FullSurface() => new()
+    {
+        ["Name"] = "LedgerSink",
+        ["Transport"] = "Http",
+        ["Http:Url"] = $"{Origin}/accounts/{{key:base64url}}/entries?source={{outbox}}",
+        ["Http:Method"] = "PUT",
+        ["Http:ContentType"] = "application/vnd.ledger.entry+json",
+        ["Http:Headers:Idempotency-Key"] = "{outbox}-{id}",
+        ["Http:ForwardHeaders:Mode"] = "listed",
+        ["Http:ForwardHeaders:Names:0"] = "traceparent",
+        ["Http:ForwardHeaders:Exclude:0"] = "cookie",
+        ["Http:ForwardHeaders:NamePrefix"] = "x-outbox-",
+        ["Http:StatusCodes:Delivered:0"] = "2xx",
+        ["Http:StatusCodes:Delivered:1"] = "409",
+        ["Http:StatusCodes:Rejected:0"] = "400",
+        ["Http:StatusCodes:Retried:0"] = "423",
+        ["Http:StatusCodes:Paused:0"] = "503",
+        ["Http:SendTimeout"] = "00:00:10",
+        ["Http:ConnectTimeout"] = "00:00:03",
+        ["Http:MaxRequestsInFlight"] = "16",
+        ["Http:HealthProbe:Url"] = $"{Origin}/healthz",
+        ["Http:HealthProbe:Method"] = "GET",
+        ["Http:HealthProbe:Expected:0"] = "2xx",
+        ["Http:RequestMapper"] = "ledger-envelope",
+        ["Http:ResponseClassifier"] = "ledger-classifier",
+    };
+
+    // Keys starting with '!' are relay-level (e.g. HttpCredentials); the rest belong to the single destination.
+    private static (HttpDestinationFactory Factory, DestinationOptions Destination) Destination(Dictionary<string, string?> settings, HttpHookLookup? hooks = null)
     {
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(settings.Select(s => KeyValuePair.Create($"Destinations:0:{s.Key}", s.Value)))
+            .AddInMemoryCollection(settings.Select(s => s.Key.StartsWith('!')
+                ? KeyValuePair.Create(s.Key[1..], s.Value)
+                : KeyValuePair.Create($"Destinations:0:{s.Key}", s.Value)))
             .Build();
-        var factory = new HttpDestinationFactory(NullLoggerFactory.Instance, new HttpCredentialSection(new RelayConfiguration(config)));
+        var factory = new HttpDestinationFactory(NullLoggerFactory.Instance, new HttpCredentialSection(new RelayConfiguration(config)), hooks ?? HttpHookLookup.None);
         return (factory, Assert.Single(RelayOptionsBinder.Bind(config).Destinations));
     }
+
+    private static string TempDirectory()
+    {
+        var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"http-registration-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    private static (string Certificate, string Key) WritePem(string directory, string name)
+    {
+        using var rsa = RSA.Create(2048);
+        using var certificate = SelfSigned(rsa, name);
+        var certificatePath = System.IO.Path.Combine(directory, $"{name}.crt");
+        var keyPath = System.IO.Path.Combine(directory, $"{name}.key");
+        File.WriteAllText(certificatePath, certificate.ExportCertificatePem());
+        File.WriteAllText(keyPath, rsa.ExportPkcs8PrivateKeyPem());
+        return (certificatePath, keyPath);
+    }
+
+    private static string WritePfx(string directory, string name, string password)
+    {
+        using var rsa = RSA.Create(2048);
+        using var certificate = SelfSigned(rsa, name);
+        var path = System.IO.Path.Combine(directory, $"{name}.pfx");
+        File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, password));
+        return path;
+    }
+
+    private static X509Certificate2 SelfSigned(RSA rsa, string name) =>
+        new CertificateRequest($"CN={name}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
 
     private static IServiceCollection WithRelayConfiguration()
     {

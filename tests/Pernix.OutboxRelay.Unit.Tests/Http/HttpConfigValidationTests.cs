@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Pernix.OutboxRelay.Core.Configuration;
 using Pernix.OutboxRelay.Destination.Http;
+using Pernix.OutboxRelay.Destination.Http.Options;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -983,14 +984,46 @@ public sealed class HttpConfigValidationTests : IDisposable
     }
 
     [Fact]
-    public void Binding_failure_suppresses_rules_on_the_same_key_group()
+    public void Binding_failure_suppresses_only_rules_on_the_failed_key()
     {
-        var failures = Failures(new() { ["Url"] = $"{Https}/orders", ["Signing:Encoding"] = "sentinel", ["SendTimeout"] = "30" });
+        var failures = Failures(new()
+        {
+            ["Url"] = $"{Https}/orders",
+            ["Method"] = "GET",
+            ["SendTimeout"] = "30",
+            ["Signing:Scheme"] = "HmacSha256",
+            ["Signing:HeaderName"] = "X-Sig",
+            ["Signing:Encoding"] = "sentinel",
+        });
 
         Assert.Equal(
             [
+                $"{P}.Method: must be one of POST, PUT, PATCH",
                 $"{P}.SendTimeout: must be a duration in hh:mm:ss form",
+                $"{P}.Signing.Credential: required",
                 $"{P}.Signing.Encoding: must be one of Hex, Base64",
+            ],
+            failures.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Binding_failure_on_a_scheme_suppresses_its_scheme_dependent_rules()
+    {
+        var failures = Failures(new()
+        {
+            ["Url"] = $"{Https}/orders",
+            ["Authentication:Scheme"] = "sentinel",
+            ["Authentication:Credential"] = "Ledger",
+            ["Authentication:HeaderName"] = "X-Api-Key",
+            ["Signing:Scheme"] = "HmacSha256",
+            ["Signing:HeaderName"] = "X-Sig",
+            ["Signing:Credential"] = "Missing",
+        });
+
+        Assert.Equal(
+            [
+                $"{P}.Authentication.Scheme: must be one of {string.Join(", ", Enum.GetNames<AuthenticationScheme>())}",
+                $"{P}.Signing.Credential: not defined in HttpCredentials",
             ],
             failures.Order(StringComparer.Ordinal));
     }

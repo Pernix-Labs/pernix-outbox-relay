@@ -67,9 +67,10 @@ public sealed class HttpDestinationFactory : IDestinationFactory
         var compileFailures = new List<string>();
         var plan = HttpPlanCompiler.Compile(http, name, ownPath, outboxes, credentials, hooks, CreateTokenCache, compileFailures);
 
-        // A rejected value falls back to its default, so rules on the same key group would report a bogus failure.
-        var bindGroups = failures.Select(f => Group(f, ownPath)).OfType<string>().ToHashSet(StringComparer.Ordinal);
-        failures.AddRange(compileFailures.Where(f => Group(f, ownPath) is not { } group || !bindGroups.Contains(group)));
+        // A rejected value falls back to its default: rules on that key, and scheme-dependent rules under a
+        // rejected Scheme, would report a failure the operator did not cause.
+        var bindKeys = failures.Select(f => KeyOf(f, ownPath)).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        failures.AddRange(compileFailures.Where(f => !Cascades(f)));
 
         if (failures.Count == 0 && plan is not null && !string.IsNullOrWhiteSpace(destination.Name))
         {
@@ -86,6 +87,24 @@ public sealed class HttpDestinationFactory : IDestinationFactory
 
         return failures;
 
+        bool Cascades(string failure)
+        {
+            if (KeyOf(failure, ownPath) is not { } key)
+            {
+                return false;
+            }
+
+            if (bindKeys.Contains(key))
+            {
+                return true;
+            }
+
+            var parent = key.LastIndexOf('.');
+            return parent > 0
+                   && bindKeys.Contains($"{key[..parent]}.Scheme")
+                   && failure.Contains(": does not apply to Scheme ", StringComparison.Ordinal);
+        }
+
         OAuth2TokenCache CreateTokenCache(AuthenticationOptions options, HttpCredential credential, HandlerSettings handler) =>
             new(name, options, credential, handler, logger);
     }
@@ -95,7 +114,7 @@ public sealed class HttpDestinationFactory : IDestinationFactory
 
     internal HttpDestinationPlan PlanOf(string destination) => resolved[destination];
 
-    private static string? Group(string failure, string ownPath)
+    private static string? KeyOf(string failure, string ownPath)
     {
         if (!failure.StartsWith(ownPath + ".", StringComparison.Ordinal))
         {
@@ -103,7 +122,7 @@ public sealed class HttpDestinationFactory : IDestinationFactory
         }
 
         var rest = failure.AsSpan(ownPath.Length + 1);
-        var end = rest.IndexOfAny('.', ':', '[');
-        return end < 0 ? rest.ToString() : rest[..end].ToString();
+        var end = rest.IndexOf(": ", StringComparison.Ordinal);
+        return end < 0 ? null : rest[..end].ToString();
     }
 }
