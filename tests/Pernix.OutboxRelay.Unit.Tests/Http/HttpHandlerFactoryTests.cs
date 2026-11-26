@@ -39,8 +39,37 @@ public sealed class HttpHandlerFactoryTests : IDisposable
         Assert.Equal(64 * 1024, handler.MaxResponseDrainSize);
         Assert.Equal(TimeSpan.FromSeconds(2), handler.ResponseDrainTimeout);
         Assert.True(handler.EnableMultipleHttp2Connections);
+        Assert.Same(HttpHandlerFactory.Utf8RequestHeaders, handler.RequestHeaderEncodingSelector);
         Assert.Null(handler.SslOptions.RemoteCertificateValidationCallback);
         Assert.Null(handler.SslOptions.ClientCertificates);
+    }
+
+    [Theory]
+    [InlineData("X-Reason")]
+    [InlineData("traceparent")]
+    [InlineData("")]
+    public void Request_header_encoding_is_utf8_for_any_name(string name)
+    {
+        using var request = new HttpRequestMessage();
+
+        Assert.Same(Encoding.UTF8, HttpHandlerFactory.Utf8RequestHeaders(name, request));
+    }
+
+    [Fact]
+    public async Task Non_ascii_header_value_is_sent_as_utf8()
+    {
+        const string Value = "café ✓ ünïcode";
+        var connection = new CapturingStream("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n"u8.ToArray());
+        var handler = HttpHandlerFactory.Create(new HandlerSettings(TimeSpan.FromSeconds(5), 1, null), new Hashtable());
+        handler.ConnectCallback = (_, _) => ValueTask.FromResult<Stream>(connection);
+        using var invoker = new HttpMessageInvoker(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "http://relay.test/hook");
+        Assert.True(request.Headers.TryAddWithoutValidation("X-Reason", Value));
+
+        using var response = await invoker.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Contains("X-Reason: " + Value + "\r\n", Encoding.UTF8.GetString(connection.Written), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -269,6 +298,68 @@ public sealed class HttpHandlerFactoryTests : IDisposable
         await tls.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray());
         await tls.FlushAsync();
         return presented;
+    }
+
+    private sealed class CapturingStream(byte[] response) : Stream
+    {
+        private readonly MemoryStream written = new();
+        private readonly MemoryStream reply = new(response);
+
+        public byte[] Written
+        {
+            get
+            {
+                lock (written)
+                {
+                    return written.ToArray();
+                }
+            }
+        }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => reply.Read(buffer, offset, count);
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(reply.Read(buffer.Span));
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            lock (written)
+            {
+                written.Write(buffer, offset, count);
+            }
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            lock (written)
+            {
+                written.Write(buffer.Span);
+            }
+
+            return ValueTask.CompletedTask;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
     }
 
     private string WritePem(string name, X509Certificate2 certificate)

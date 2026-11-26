@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace Pernix.OutboxRelay.Destination.Http;
 
@@ -12,6 +13,9 @@ internal static class HttpHandlerFactory
     internal static readonly TimeSpan PooledConnectionIdleTimeout = TimeSpan.FromSeconds(90);
     internal static readonly TimeSpan ResponseDrainTimeout = TimeSpan.FromSeconds(2);
     internal const int MaxResponseDrainSize = 64 * 1024;
+
+    // Row header values are UTF-8 by contract (MessageHeaders); the default ASCII-only encoding would fault such rows forever.
+    internal static readonly HeaderEncodingSelector<HttpRequestMessage> Utf8RequestHeaders = static (_, _) => Encoding.UTF8;
 
     private static readonly Oid ServerAuthentication = new("1.3.6.1.5.5.7.3.1");
     // Exact upper- and lower-case names only, as read by .NET's environment proxy.
@@ -39,6 +43,7 @@ internal static class HttpHandlerFactory
             MaxResponseDrainSize = MaxResponseDrainSize,
             ResponseDrainTimeout = ResponseDrainTimeout,
             EnableMultipleHttp2Connections = true,
+            RequestHeaderEncodingSelector = Utf8RequestHeaders,
         };
 
         if (settings.TrustedRoots is { } roots)

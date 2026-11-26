@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Time.Testing;
 using Pernix.OutboxRelay.Core.Abstractions;
 using Pernix.OutboxRelay.Destination.Http;
@@ -377,6 +378,95 @@ public sealed class HttpSendGateTests
     }
 
     [Fact]
+    public async Task Suspended_wait_completed_from_another_thread_allocates_nothing_after_warm_up()
+    {
+        await Task.Yield();
+        using var gate = Gate(1);
+        using var releaser = new Releaser(gate);
+        for (var i = 0; i < 100; i++)
+        {
+            SuspendedCycle(gate, releaser);
+        }
+
+        releaser.Reset();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 1000; i++)
+        {
+            SuspendedCycle(gate, releaser);
+        }
+
+        var awaiting = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(1000, releaser.Cycles);
+        Assert.Equal(0, awaiting);
+        Assert.Equal(0, releaser.ReleaseBytes);
+        Assert.Equal(0, releaser.ContinuationBytes);
+        Assert.Equal(1, gate.FreeCount);
+        Assert.Equal(0, gate.HeldCount);
+        Assert.Equal(gate.Rented, gate.Returned);
+    }
+
+    [Fact]
+    public async Task Throwing_slot_factory_returns_the_index_and_the_next_acquire_succeeds()
+    {
+        var failures = 1;
+        using var gate = new HttpSendGate(1, index => failures-- > 0 ? throw new InvalidOperationException("create") : new HttpSendSlot(index));
+        var first = gate.Rent(SendTimeout, CancellationToken.None);
+
+        Assert.Throws<InvalidOperationException>(() => gate.AcquireAsync(first));
+        Assert.Equal(1, gate.FreeCount);
+        Assert.Equal(0, gate.HeldCount);
+        gate.Return(first);
+
+        var second = gate.Rent(SendTimeout, CancellationToken.None);
+        var slot = await gate.AcquireAsync(second);
+        Assert.Equal(0, slot.Index);
+        Assert.Equal(0, gate.FreeCount);
+        Assert.Equal(1, gate.HeldCount);
+        gate.Release(slot);
+        gate.Return(second);
+        Assert.Equal(1, gate.FreeCount + gate.HeldCount);
+        Assert.Equal(gate.Rented, gate.Returned);
+    }
+
+    [Fact]
+    public async Task Throwing_slot_factory_hands_the_index_to_a_queued_waiter()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var proceed = new ManualResetEventSlim();
+        var calls = 0;
+        using var gate = new HttpSendGate(1, index =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                entered.Set();
+                proceed.Wait(TestContext.Current.CancellationToken);
+                throw new InvalidOperationException("create");
+            }
+
+            return new HttpSendSlot(index);
+        });
+        var first = gate.Rent(SendTimeout, CancellationToken.None);
+        var failing = Task.Run(() => gate.AcquireAsync(first).AsTask(), TestContext.Current.CancellationToken);
+        Assert.True(entered.Wait(Bounded, TestContext.Current.CancellationToken));
+        var waiter = gate.Rent(SendTimeout, CancellationToken.None);
+        var pending = gate.AcquireAsync(waiter);
+        Assert.False(pending.IsCompleted);
+
+        proceed.Set();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => failing.WaitAsync(Bounded, TestContext.Current.CancellationToken));
+        var slot = await pending.AsTask().WaitAsync(Bounded, TestContext.Current.CancellationToken);
+        Assert.Equal(0, gate.FreeCount);
+        Assert.Equal(1, gate.HeldCount);
+        gate.Release(slot);
+        gate.Return(waiter);
+        gate.Return(first);
+        Assert.Equal(1, gate.FreeCount);
+        Assert.Equal(0, gate.HeldCount);
+        Assert.Equal(gate.Rented, gate.Returned);
+    }
+
+    [Fact]
     public async Task Dispose_fails_pending_waiters_and_later_returns_free_their_resources()
     {
         var gate = Gate(1);
@@ -407,6 +497,159 @@ public sealed class HttpSendGateTests
         gate.Release(granted);
         gate.Return(waiter);
         gate.Return(holder);
+    }
+
+    private static void SuspendedCycle(HttpSendGate gate, Releaser releaser)
+    {
+        var holder = gate.Rent(SendTimeout, CancellationToken.None);
+        var slot = gate.AcquireAsync(holder).Result;
+        var waiter = gate.Rent(SendTimeout, CancellationToken.None);
+        var pending = gate.AcquireAsync(waiter);
+        Assert.False(pending.IsCompleted);
+        var run = AwaitAndRelease(gate, pending, releaser);
+        Assert.False(run.IsCompleted);
+        releaser.Release(slot);
+        var spin = default(SpinWait);
+        while (!run.IsCompleted)
+        {
+            spin.SpinOnce(sleep1Threshold: -1);
+        }
+
+        run.GetAwaiter().GetResult();
+        releaser.WaitDone();
+        gate.Return(waiter);
+        gate.Return(holder);
+    }
+
+    private static ValueTask AwaitAndRelease(HttpSendGate gate, ValueTask<HttpSendSlot> pending, Releaser releaser)
+    {
+        var machine = new AwaitAndReleaseMachine
+        {
+            Builder = PoolingAsyncValueTaskMethodBuilder.Create(),
+            Gate = gate,
+            Pending = pending,
+            Releaser = releaser,
+        };
+        machine.Builder.Start(ref machine);
+        return machine.Builder.Task;
+    }
+
+    // What Release emits for a pooled async ValueTask: Debug's class state machine would allocate per call.
+    private struct AwaitAndReleaseMachine : IAsyncStateMachine
+    {
+        public PoolingAsyncValueTaskMethodBuilder Builder;
+        public HttpSendGate Gate;
+        public ValueTask<HttpSendSlot> Pending;
+        public Releaser Releaser;
+        private ValueTaskAwaiter<HttpSendSlot> awaiter;
+        private int state;
+
+        public void MoveNext()
+        {
+            try
+            {
+                if (state == 0)
+                {
+                    awaiter = Pending.GetAwaiter();
+                    if (!awaiter.IsCompleted)
+                    {
+                        state = 1;
+                        Builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
+                        return;
+                    }
+                }
+
+                var granted = awaiter.GetResult();
+                awaiter = default;
+                var start = GC.GetAllocatedBytesForCurrentThread();
+                Gate.Release(granted);
+                Releaser.ContinuationBytes += GC.GetAllocatedBytesForCurrentThread() - start;
+            }
+            catch (Exception exception)
+            {
+                state = -2;
+                Builder.SetException(exception);
+                return;
+            }
+
+            state = -2;
+            Builder.SetResult();
+        }
+
+        public void SetStateMachine(IAsyncStateMachine stateMachine) => Builder.SetStateMachine(stateMachine);
+    }
+
+    // Spins instead of blocking: a first contended Monitor wait or wake would allocate on the measured thread.
+    private sealed class Releaser : IDisposable
+    {
+        private readonly HttpSendGate gate;
+        private readonly Thread thread;
+        private HttpSendSlot? slot;
+        private int requested;
+        private int completed;
+        private volatile bool stopping;
+
+        public Releaser(HttpSendGate gate)
+        {
+            this.gate = gate;
+            thread = new Thread(Run) { IsBackground = true };
+            thread.Start();
+        }
+
+        public long ReleaseBytes { get; private set; }
+
+        public long ContinuationBytes { get; set; }
+
+        public int Cycles { get; private set; }
+
+        public void Reset()
+        {
+            ReleaseBytes = 0;
+            ContinuationBytes = 0;
+            Cycles = 0;
+        }
+
+        public void Release(HttpSendSlot held)
+        {
+            slot = held;
+            Interlocked.Increment(ref requested);
+        }
+
+        public void WaitDone()
+        {
+            var spin = default(SpinWait);
+            while (Volatile.Read(ref completed) < Volatile.Read(ref requested))
+            {
+                spin.SpinOnce(sleep1Threshold: -1);
+            }
+        }
+
+        public void Dispose()
+        {
+            stopping = true;
+            thread.Join();
+        }
+
+        private void Run()
+        {
+            var handled = 0;
+            var spin = default(SpinWait);
+            while (!stopping)
+            {
+                if (Volatile.Read(ref requested) == handled)
+                {
+                    spin.SpinOnce(sleep1Threshold: -1);
+                    continue;
+                }
+
+                var start = GC.GetAllocatedBytesForCurrentThread();
+                gate.Release(slot!);
+                ReleaseBytes += GC.GetAllocatedBytesForCurrentThread() - start;
+                Cycles++;
+                handled++;
+                Interlocked.Increment(ref completed);
+            }
+        }
     }
 
     private static async Task<string> Send(HttpSendGate gate, Kind kind)

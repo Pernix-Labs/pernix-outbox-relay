@@ -167,7 +167,26 @@ internal sealed class HttpSendGate : IDisposable
 
         if (index >= 0)
         {
-            return new ValueTask<HttpSendSlot>(slots[index] ??= createSlot(index));
+            var slot = slots[index];
+            if (slot is null)
+            {
+                try
+                {
+                    slot = slots[index] = createSlot(index);
+                }
+                catch
+                {
+                    lock (sync)
+                    {
+                        context.State = SendContext.Idle;
+                    }
+
+                    HandOffUncreated(index);
+                    throw;
+                }
+            }
+
+            return new ValueTask<HttpSendSlot>(slot);
         }
 
         var version = context.Waiter.Version;
@@ -182,20 +201,7 @@ internal sealed class HttpSendGate : IDisposable
         var disposeSlot = false;
         lock (sync)
         {
-            while (ringCount > 0)
-            {
-                var entry = ring[ringHead];
-                ring[ringHead] = default;
-                ringHead = (ringHead + 1) & (ring.Length - 1);
-                ringCount--;
-                if (entry.Generation == entry.Context.Generation && entry.Context.State == SendContext.Waiting)
-                {
-                    entry.Context.State = SendContext.Granted;
-                    next = entry.Context;
-                    break;
-                }
-            }
-
+            next = DequeueLiveWaiter();
             if (next is null)
             {
                 held--;
@@ -311,6 +317,62 @@ internal sealed class HttpSendGate : IDisposable
         {
             slot.Dispose();
         }
+    }
+
+    // An index whose createSlot threw goes to the next live waiter (which retries) or back to the free stack.
+    private void HandOffUncreated(int index)
+    {
+        while (true)
+        {
+            SendContext? next;
+            lock (sync)
+            {
+                next = DequeueLiveWaiter();
+                if (next is null)
+                {
+                    held--;
+                    if (!disposed)
+                    {
+                        free[top++] = index;
+                    }
+
+                    AssertInvariant();
+                    return;
+                }
+            }
+
+            HttpSendSlot slot;
+            try
+            {
+                slot = slots[index] ??= createSlot(index);
+            }
+            catch (Exception exception)
+            {
+                next.Waiter.SetException(exception);
+                continue;
+            }
+
+            next.Waiter.SetResult(slot);
+            return;
+        }
+    }
+
+    private SendContext? DequeueLiveWaiter()
+    {
+        while (ringCount > 0)
+        {
+            var entry = ring[ringHead];
+            ring[ringHead] = default;
+            ringHead = (ringHead + 1) & (ring.Length - 1);
+            ringCount--;
+            if (entry.Generation == entry.Context.Generation && entry.Context.State == SendContext.Waiting)
+            {
+                entry.Context.State = SendContext.Granted;
+                return entry.Context;
+            }
+        }
+
+        return null;
     }
 
     private void WaitCancelled(SendContext context)
