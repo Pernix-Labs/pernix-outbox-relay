@@ -1019,3 +1019,112 @@ Not in this table: `kafka-dlq` (verb added on 2026-11-10, after the initial base
 - **Against the latest sections.** No `kafka`, `kafka-dlq` or `term` cell moved by more than 16.0 B since `## 2026-11-14 — Raw Kafka produce`: kafka-only 0.0 B/msg, kafka-dlq 304.0 / 320.0 / 368.0 B/dlq-msg, `term` kafka 201.6 / 191.6 / 248.3 B/msg (213.1 / 191.5 / 248.3 there), `term` dlq 895.4 / 930.3 / 992.2 B/dlq-msg (911.4 / 929.3 / 992.3 there). Those figures come from another machine, so the two differences on the None cells are not attributed. #2, #3 and #4 are not allocation changes and appended no section.
 - **Idle** stays a high-noise cell: medians 57.1-132.0 B/s, spread 37.3-127.2 B/s.
 - **Gating** is unchanged: interleaved base vs branch runs on one machine ([`docs/development.md#measuring-allocations`](../../docs/development.md#measuring-allocations)).
+
+## Http destination
+
+Spike for design R3 (`docs/specs/2026-11-26-http-destination/design.md`, "R3: allocation per request"): the framework floor of one HTTP/1.1 request, measured before any Http destination code or ceiling exists. No relay package is involved. `http-floor` sends through a minimal path written in `Scenarios/HttpFloorScenario.cs`: one `SocketsHttpHandler` with the O8 settings (`UseProxy` default), `HttpMessageInvoker`, a static shared `Uri`, `new HttpRequestMessage`, `new ReadOnlyMemoryContent(payload)`, headers via `TryAddWithoutValidation` with cached value strings (stand-in for the O5 cache), `Content-Type` as a cached string, a pooled deadline CTS (`CancelAfter` + `TryReset`), `PoolingAsyncValueTaskMethodBuilder`, response disposed unread. There is no send gate (C1), so `MaxConnectionsPerServer` = window. The server is `Infrastructure/HttpLoopback.cs`: an in-memory duplex stream behind `ConnectCallback` that answers the C6 reference response (`200`, 6 headers, 100 B JSON body, unique `X-Request-Id`) or, with `--response 204`, `204` with 2 headers.
+
+### Method
+
+| Item | Value |
+|---|---|
+| Harness commit | the task 1 commit on `avataraps/spec-http-destination` (parent `5b262eb`). No product code is measured |
+| Date | 2026-11-26, unprofiled grid 20:20-20:23 UTC |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1 (26B131), arm64 |
+| .NET | runtime 10.0.15, SDK 10.0.404, Release build |
+| GC mode | workstation, non-concurrent (`gcServer=False latency=Batch`) |
+| Other | `otel=False`. **The machine was not idle** (1/5-minute load average 10.1 / 45.0 at 20:20). Rates are not usable. B/req is deterministic to 0.1 B across rounds and runs |
+
+Commands (repo root):
+
+```sh
+dotnet build -c Release benchmarks/Pernix.OutboxRelay.Benchmarks
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- loopback
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- loopback --response 204
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-floor
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-floor --response 204 --urls static
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-floor --profile
+```
+
+Each figure is the `reported` round (round 3 of 3, after warm-up). `None`/`PerKey` run window 500 (200,000 req, 50,000 warm-up), `Strict` runs window 1 (20,000 req, 5,000 warm-up). The mode only sets the window: there is no relay code here to differ by mode.
+
+### Loopback self-check (`loopback`, B/req)
+
+| Cell | B/req |
+|---|---:|
+| loopback 200 | 0.0 |
+| loopback 204 | 0.0 |
+
+The fake alone allocates 0.0 B/req (limit 8, the harness fails above it), so every `http-floor` byte below is client stack.
+
+### Totals per cell (`http-floor`, B/req)
+
+`static` = one shared `Uri`. `tpl` = `/orders/{id}` rendered into a reused `char[]`, then one `string` and `new Uri(string)`. `tpl-raw` = the same with `UriCreationOptions.DangerousDisablePathAndQueryCanonicalization`.
+
+| Cell | h0 | h1 | h4 |
+|---|---:|---:|---:|
+| None w500 static 200 | 1,712.1 | **1,848.1** | 1,848.1 |
+| PerKey w500 static 200 | 1,712.1 | 1,848.1 | 1,848.1 |
+| Strict w1 static 200 | 1,712.1 | 1,848.1 | 1,848.1 |
+| None w500 tpl 200 | 2,118.4 | 2,254.4 | 2,254.4 |
+| PerKey w500 tpl 200 | 2,118.4 | 2,254.4 | 2,254.4 |
+| Strict w1 tpl 200 | 2,104.1 | 2,240.1 | 2,240.1 |
+| None w500 tpl-raw 200 | 2,118.4 | 2,254.4 | 2,254.4 |
+| PerKey w500 tpl-raw 200 | 2,118.4 | 2,254.4 | 2,254.4 |
+| Strict w1 tpl-raw 200 | 2,104.1 | 2,240.2 | 2,240.2 |
+| None w500 static 204 | 1,368.1 | 1,504.1 | 1,504.1 |
+| PerKey w500 static 204 | 1,368.1 | 1,504.1 | 1,504.1 |
+| Strict w1 static 204 | 1,368.1 | 1,504.1 | 1,504.1 |
+
+- First request header: +136.0 B (`HttpRequestHeaders` + its first `HeaderEntry[]`). h4 = h1: 4 headers fit that first array.
+- C6 response vs `204` with 2 headers: +344.0 B/req.
+- Templated URL: +406.3 B/req (None h1), the per-row `string` + `Uri` (O1, C3).
+
+### Per type, mapped to design objects (`http-floor None w500 h1 static 200 --profile`)
+
+`--profile` samples `GCAllocationTick` (one event per ~100 KB), so per-type figures are estimates (±~10% for a type with a 5% share). Sampled 363,217 KB vs 363,149 KB measured. The profiled cell measured 1,859.3 B/req, 11.2 B over the unprofiled 1,848.1 (listener cost). Some types serve both request and response (`HeaderEntry[]`, `HttpContentHeaders`, `HeaderStoreItemInfo`, `String`): they are listed under the object that owns most of them, with the split stated.
+
+| Design object | Type | ~B/req |
+|---|---|---:|
+| O1 `Uri` + URL string | none (static `Uri`) | 0 |
+| O2 `HttpClient` layer | none (`HttpMessageInvoker`) | 0 |
+| O3 `HttpRequestMessage` | `HttpRequestMessage` | 68.8 |
+| O4 request headers | `HttpRequestHeaders` | 48.5 |
+| | `HeaderEntry[]`, request share (h0 → h1 delta minus `HttpRequestHeaders`) | ~88 |
+| O5 forwarded value strings | none (cached strings) | 0 |
+| O6 deadline | none (pooled CTS, no CTS or timer type sampled) | 0 |
+| O7(a) content + content headers | `ReadOnlyMemoryContent` | 66.1 |
+| | `HttpContentHeaders` (request and response content headers) | 123.1 |
+| | `HeaderStoreItemInfo` (parsed `Content-Length` / `Content-Type`) | 69.3 |
+| | `System.Int64` (boxed `Content-Length`) | 39.4 |
+| | `ContentLengthWriteStream` | 46.4 |
+| O8 handler + response | ``Task`1[HttpResponseMessage]`` (handler `SendAsync`) | 147.6 |
+| | `HttpResponseMessage` | 69.8 |
+| | `HttpResponseHeaders` | 51.2 |
+| | `HttpConnectionResponseContent` | 57.0 |
+| | `ContentLengthReadStream` | 48.5 |
+| | ``Node[HttpConnection]`` (pool idle list) | 35.2 |
+| | `HeaderEntry[]`, response and content share | ~264 |
+| | `String` (response header values, mainly `X-Request-Id`) | ~102 |
+| O8 macOS system proxy lookup | `SafeCFStringHandle` 125.8, `SafeCreateHandle` 69.3, `SafeCFDictionaryHandle` 62.9, `SafeCFArrayHandle` 27.7, `CFProxy` 26.1 | 311.8 |
+| | `String` (proxy lookup share) | ~212 |
+| O9 own state machine | none (pooled builder box) | 0 |
+| O10 / C1 gate | not in the spike | n/a |
+| O11-O15 | not exercised (static headers, templates, signing, results, dead letter) | n/a |
+
+Templated, per-type delta (`tpl` vs `static`, None h1, profiled): `String` +222, `UriInfo` +90, `MoreInfo` +65, `Uri` object and the rest ~+30.
+
+Budget (Round 1) vs measured, static ref h1: framework floor estimated 1,380-2,180, measured 1,848.1 with the C6 response and 1,504.1 with `204`. Templated estimated ~1.7-2.6 KB, measured 2,254.4.
+
+### C3 flag result
+
+`DangerousDisablePathAndQueryCanonicalization` saves 0 B: `tpl` and `tpl-raw` match to 0.1 B in every cell (2,254.4 vs 2,254.4 None h1). Rates under this load cannot show its CPU gain. The design's bytes argument for the flag does not hold. A kept flag needs a CPU measurement on an idle machine.
+
+### Connect count result (C6)
+
+Every cell passes: connects after warm-up = connects at the end, so an unread 100 B body never costs a reconnect. `Strict` w1: 1 connection, peak in-flight 1. w500: 1-35 connections (varies by run), all ≤ window. The connection count equals the peak in-flight seen at the fake only in some cells: the pool opens a connection for a queued request that another connection may then serve, so connects ≥ peak in-flight. The harness asserts no growth after warm-up and connects ≤ window, not equality with the fake's peak.
+
+### Notes
+
+- **macOS proxy lookup.** With `UseProxy` default, `SocketsHttpHandler` on macOS asks the system proxy configuration per request: ~524 B/req (CF handles + strings) of the 1,848.1. A one-off run with `UseProxy = false` (not committed) measured 1,319.9 B/req for None h1 static, −539.4 B, at ~3.4× the rate. This is outside relay code, and Linux uses `HttpEnvironmentProxy` instead. The OS a guard ceiling is set on matters.
+- No `AllocationCeilings` change.

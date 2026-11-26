@@ -111,6 +111,12 @@ internal static class Verbs
             case "churn":
                 await TimedAsync("churn", ChurnScenario.RunAsync, options);
                 break;
+            case "loopback":
+                await TimedAsync("loopback", HttpFloorScenario.LoopbackAsync, options);
+                break;
+            case "http-floor":
+                await TimedAsync("http-floor", HttpFloorScenario.RunAsync, options);
+                break;
             case "flat":
                 await FlatAsync(options);
                 break;
