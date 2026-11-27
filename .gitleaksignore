@@ -3,5 +3,5 @@
 771a9470a0e34b9120d48dacf29851c1c8fb0169:tests/Pernix.OutboxRelay.Unit.Tests/Configuration/RelayStartupValidatorTests.cs:generic-api-key:14
 771a9470a0e34b9120d48dacf29851c1c8fb0169:tests/Pernix.OutboxRelay.Unit.Tests/Leadership/OutboxWorkerTests.cs:generic-api-key:12
 # Published Standard Webhooks reference test vector (public signing secret used by the signer tests), not a credential.
-1e75806f7514ab1381156f024e19bee420ba2acd:tests/Pernix.OutboxRelay.Unit.Tests/Http/RequestSignerTests.cs:generic-api-key:14
-1e75806f7514ab1381156f024e19bee420ba2acd:tests/Pernix.OutboxRelay.Unit.Tests/Http/RequestSignerTests.cs:generic-api-key:27
+8b4bc06c37ad0f8f24dc7a51090813824e9bf5f2:tests/Pernix.OutboxRelay.Unit.Tests/Http/RequestSignerTests.cs:generic-api-key:14
+8b4bc06c37ad0f8f24dc7a51090813824e9bf5f2:tests/Pernix.OutboxRelay.Unit.Tests/Http/RequestSignerTests.cs:generic-api-key:27
