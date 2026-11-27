@@ -58,8 +58,8 @@ public sealed class EmbeddedHostParityTests(PostgreSqlFixture postgres, KafkaFix
     [Fact]
     public async Task Embedded_and_image_hosts_report_the_same_health()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
-        await container.StartAsync(Ct);
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
+        await container.StartBoundedAsync(Ct);
         var (_, _, imageSettings) = await CreateOutboxAsync(container.GetConnectionString());
         var (_, _, embeddedSettings) = await CreateOutboxAsync(container.GetConnectionString());
 

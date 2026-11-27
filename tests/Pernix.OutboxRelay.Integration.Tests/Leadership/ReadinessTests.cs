@@ -18,8 +18,8 @@ public sealed class ReadinessTests(KafkaFixture kafka)
     [Fact]
     public async Task Unreachable_database_fails_readiness_not_liveness_and_recovers()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
-        await container.StartAsync(Ct);
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
+        await container.StartBoundedAsync(Ct);
         var schema = PostgreSqlFixture.NewSchema();
         await PostgreSqlFixture.CreateOutboxSchemaAsync(container.GetConnectionString(), schema);
         var outbox = RelayFactory.NewOutboxName();
@@ -44,8 +44,8 @@ public sealed class ReadinessTests(KafkaFixture kafka)
     [Fact]
     public async Task Shutdown_while_leader_check_hangs_ends_loop_without_fault()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
-        await container.StartAsync(Ct);
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
+        await container.StartBoundedAsync(Ct);
         var schema = PostgreSqlFixture.NewSchema();
         await PostgreSqlFixture.CreateOutboxSchemaAsync(container.GetConnectionString(), schema);
 

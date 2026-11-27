@@ -253,7 +253,7 @@ public sealed class PostgreSqlOutboxSessionTests(PostgreSqlFixture postgres)
     [Fact]
     public async Task Check_fails_within_command_deadline_when_server_stops_answering()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
         var store = await ValidatedStoreAsync(container);
         var session = await store.OpenSessionAsync(Ct);
         await container.PauseAsync(Ct);
@@ -274,7 +274,7 @@ public sealed class PostgreSqlOutboxSessionTests(PostgreSqlFixture postgres)
     [Fact]
     public async Task Caller_cancellation_mid_command_surfaces_as_cancellation()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
         var store = await ValidatedStoreAsync(container);
         var session = await store.OpenSessionAsync(Ct);
         await container.PauseAsync(Ct);
@@ -513,7 +513,7 @@ public sealed class PostgreSqlOutboxSessionTests(PostgreSqlFixture postgres)
     [Fact]
     public async Task Read_fails_within_command_deadline_when_server_stops_answering()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
         var store = await ValidatedStoreAsync(container);
         var session = await store.OpenSessionAsync(Ct);
         await container.PauseAsync(Ct);
@@ -1173,7 +1173,7 @@ public sealed class PostgreSqlOutboxSessionTests(PostgreSqlFixture postgres)
 
     private static async Task<IValidatedOutboxStore> ValidatedStoreAsync(PostgreSqlContainer container)
     {
-        await container.StartAsync(Ct);
+        await container.StartBoundedAsync(Ct);
         var schema = PostgreSqlFixture.NewSchema();
         await PostgreSqlFixture.CreateOutboxSchemaAsync(container.GetConnectionString(), schema);
         var store = PostgreSqlOutboxStoreTests.Provider(("Db", container.GetConnectionString()))

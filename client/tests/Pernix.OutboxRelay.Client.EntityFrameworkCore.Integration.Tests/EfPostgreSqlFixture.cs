@@ -18,7 +18,7 @@ public sealed class EfPostgreSqlFixture : IAsyncLifetime
 {
     public const string Image = "postgres:17.11";
 
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder(Image).Build();
+    private readonly PostgreSqlContainer container = TestContainer.PostgreSql(Image).Build();
 
     public EfPostgreSqlFixture()
     {
@@ -31,7 +31,7 @@ public sealed class EfPostgreSqlFixture : IAsyncLifetime
 
     public ILoggerFactory LoggerFactory { get; }
 
-    public async ValueTask InitializeAsync() => await container.StartAsync();
+    public async ValueTask InitializeAsync() => await container.StartBoundedAsync();
 
     public async ValueTask DisposeAsync()
     {

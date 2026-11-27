@@ -11,11 +11,11 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 {
     public const string Image = "postgres:17.11";
 
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder(Image).Build();
+    private readonly PostgreSqlContainer container = TestContainer.PostgreSql(Image).Build();
 
     public string ConnectionString => container.GetConnectionString();
 
-    public async ValueTask InitializeAsync() => await container.StartAsync();
+    public async ValueTask InitializeAsync() => await container.StartBoundedAsync();
 
     public async ValueTask DisposeAsync() => await container.DisposeAsync();
 

@@ -67,7 +67,7 @@ internal sealed class PgEnvironment : IAsyncDisposable
         PostgreSqlContainer container;
         try
         {
-            container = new PostgreSqlBuilder(Image).WithLogger(NullLogger.Instance).Build();
+            container = TestContainer.PostgreSql(Image).WithLogger(NullLogger.Instance).Build();
         }
         catch (DockerUnavailableException)
         {
@@ -76,7 +76,7 @@ internal sealed class PgEnvironment : IAsyncDisposable
 
         try
         {
-            await container.StartAsync();
+            await container.StartBoundedAsync();
         }
         catch (DockerUnavailableException)
         {

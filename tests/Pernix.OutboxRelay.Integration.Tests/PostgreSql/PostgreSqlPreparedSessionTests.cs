@@ -17,7 +17,7 @@ public sealed class PostgreSqlPreparedSessionTests(PostgreSqlFixture postgres)
     [Fact]
     public async Task Read_and_commit_after_a_caller_cancelled_read_are_lost_while_it_runs()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
         var store = await ValidatedStoreAsync(container);
         var session = await store.OpenSessionAsync(Ct);
         await container.PauseAsync(Ct);
@@ -42,7 +42,7 @@ public sealed class PostgreSqlPreparedSessionTests(PostgreSqlFixture postgres)
     [Fact]
     public async Task Read_and_commit_after_a_deadline_abandoned_read_are_lost_while_it_runs()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
         var store = await ValidatedStoreAsync(container);
         var session = await store.OpenSessionAsync(Ct);
         await container.PauseAsync(Ct);
@@ -281,7 +281,7 @@ public sealed class PostgreSqlPreparedSessionTests(PostgreSqlFixture postgres)
 
     private static async Task<IValidatedOutboxStore> ValidatedStoreAsync(PostgreSqlContainer container)
     {
-        await container.StartAsync(Ct);
+        await container.StartBoundedAsync(Ct);
         var schema = PostgreSqlFixture.NewSchema();
         await PostgreSqlFixture.CreateOutboxSchemaAsync(container.GetConnectionString(), schema);
         var store = PostgreSqlOutboxStoreTests.Provider(("Db", container.GetConnectionString()))

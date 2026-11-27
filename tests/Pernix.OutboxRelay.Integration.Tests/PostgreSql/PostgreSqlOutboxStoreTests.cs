@@ -407,8 +407,8 @@ public sealed class PostgreSqlOutboxStoreTests(PostgreSqlFixture postgres)
     [Fact]
     public async Task Caller_cancellation_surfaces_as_plain_cancellation()
     {
-        await using var container = new PostgreSqlBuilder("postgres:17.11").Build();
-        await container.StartAsync(Ct);
+        await using var container = TestContainer.PostgreSql("postgres:17.11").Build();
+        await container.StartBoundedAsync(Ct);
         var schema = PostgreSqlFixture.NewSchema();
         await PostgreSqlFixture.CreateOutboxSchemaAsync(container.GetConnectionString(), schema);
         var store = Provider(("Db", container.GetConnectionString())).CreateStore(Outbox("Orders", "Db", $"{schema}.outbox"));

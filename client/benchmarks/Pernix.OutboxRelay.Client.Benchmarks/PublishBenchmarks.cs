@@ -34,8 +34,8 @@ public class PublishBenchmarks
         var connectionString = Environment.GetEnvironmentVariable(ConnectionVariable);
         if (string.IsNullOrEmpty(connectionString))
         {
-            container = new PostgreSqlBuilder(Image).Build();
-            await container.StartAsync();
+            container = TestContainer.PostgreSql(Image).Build();
+            await container.StartBoundedAsync();
             connectionString = container.GetConnectionString();
         }
 
