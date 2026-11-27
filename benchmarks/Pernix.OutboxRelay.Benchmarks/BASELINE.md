@@ -1019,3 +1019,363 @@ Not in this table: `kafka-dlq` (verb added on 2026-11-10, after the initial base
 - **Against the latest sections.** No `kafka`, `kafka-dlq` or `term` cell moved by more than 16.0 B since `## 2026-11-14 — Raw Kafka produce`: kafka-only 0.0 B/msg, kafka-dlq 304.0 / 320.0 / 368.0 B/dlq-msg, `term` kafka 201.6 / 191.6 / 248.3 B/msg (213.1 / 191.5 / 248.3 there), `term` dlq 895.4 / 930.3 / 992.2 B/dlq-msg (911.4 / 929.3 / 992.3 there). Those figures come from another machine, so the two differences on the None cells are not attributed. #2, #3 and #4 are not allocation changes and appended no section.
 - **Idle** stays a high-noise cell: medians 57.1-132.0 B/s, spread 37.3-127.2 B/s.
 - **Gating** is unchanged: interleaved base vs branch runs on one machine ([`docs/development.md#measuring-allocations`](../../docs/development.md#measuring-allocations)).
+
+## Http destination
+
+Spike for design R3 (`docs/specs/2026-11-26-http-destination/design.md`, "R3: allocation per request"): the framework floor of one HTTP/1.1 request, measured before any Http destination code or ceiling exists. No relay package is involved. `http-floor` sends through a minimal path written in `Scenarios/HttpFloorScenario.cs`: one `SocketsHttpHandler` with the O8 settings (`UseProxy` default), `HttpMessageInvoker`, a static shared `Uri`, `new HttpRequestMessage`, `new ReadOnlyMemoryContent(payload)`, headers via `TryAddWithoutValidation` with cached value strings (stand-in for the O5 cache), `Content-Type` as a cached string, a pooled deadline CTS (`CancelAfter` + `TryReset`), `PoolingAsyncValueTaskMethodBuilder`, response disposed unread. There is no send gate (C1), so `MaxConnectionsPerServer` = window. The server is `Infrastructure/HttpLoopback.cs`: an in-memory duplex stream behind `ConnectCallback` that answers the C6 reference response (`200`, 6 headers, 100 B JSON body, unique `X-Request-Id`) or, with `--response 204`, `204` with 2 headers.
+
+### Method
+
+| Item | Value |
+|---|---|
+| Harness commit | `5088422` on `avataraps/spec-http-destination` (parent `5b262eb`). No product code is measured |
+| Date | 2026-11-26, unprofiled grid 20:20-20:23 UTC |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1 (26B131), arm64 |
+| .NET | runtime 10.0.15, SDK 10.0.404, Release build |
+| GC mode | workstation, non-concurrent (`gcServer=False latency=Batch`) |
+| Other | `otel=False`. **The machine was not idle** (1/5-minute load average 10.1 / 45.0 at 20:20). Rates are not usable. B/req is deterministic to 0.1 B across rounds and runs |
+
+Commands (repo root):
+
+```sh
+dotnet build -c Release benchmarks/Pernix.OutboxRelay.Benchmarks
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- loopback
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- loopback --response 204
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-floor
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-floor --response 204 --urls static
+dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-floor --profile
+```
+
+Each figure is the `reported` round (round 3 of 3, after warm-up). `None`/`PerKey` run window 500 (200,000 req, 50,000 warm-up), `Strict` runs window 1 (20,000 req, 5,000 warm-up). The mode only sets the window: there is no relay code here to differ by mode.
+
+### Loopback self-check (`loopback`, B/req)
+
+| Cell | B/req |
+|---|---:|
+| loopback 200 | 0.0 |
+| loopback 204 | 0.0 |
+
+The fake alone allocates 0.0 B/req (limit 8, the harness fails above it), so every `http-floor` byte below is client stack.
+
+### Totals per cell (`http-floor`, B/req)
+
+`static` = one shared `Uri`. `tpl` = `/orders/{id}` rendered into a reused `char[]`, then one `string` and `new Uri(string)`. `tpl-raw` = the same with `UriCreationOptions.DangerousDisablePathAndQueryCanonicalization`.
+
+| Cell | h0 | h1 | h4 |
+|---|---:|---:|---:|
+| None w500 static 200 | 1,712.1 | **1,848.1** | 1,848.1 |
+| PerKey w500 static 200 | 1,712.1 | 1,848.1 | 1,848.1 |
+| Strict w1 static 200 | 1,712.1 | 1,848.1 | 1,848.1 |
+| None w500 tpl 200 | 2,118.4 | 2,254.4 | 2,254.4 |
+| PerKey w500 tpl 200 | 2,118.4 | 2,254.4 | 2,254.4 |
+| Strict w1 tpl 200 | 2,104.1 | 2,240.1 | 2,240.1 |
+| None w500 tpl-raw 200 | 2,118.4 | 2,254.4 | 2,254.4 |
+| PerKey w500 tpl-raw 200 | 2,118.4 | 2,254.4 | 2,254.4 |
+| Strict w1 tpl-raw 200 | 2,104.1 | 2,240.2 | 2,240.2 |
+| None w500 static 204 | 1,368.1 | 1,504.1 | 1,504.1 |
+| PerKey w500 static 204 | 1,368.1 | 1,504.1 | 1,504.1 |
+| Strict w1 static 204 | 1,368.1 | 1,504.1 | 1,504.1 |
+
+- First request header: +136.0 B (`HttpRequestHeaders` + its first `HeaderEntry[]`). h4 = h1: 4 headers fit that first array.
+- C6 response vs `204` with 2 headers: +344.0 B/req.
+- Templated URL: +406.3 B/req (None h1), the per-row `string` + `Uri` (O1, C3).
+
+### Per type, mapped to design objects (`http-floor None w500 h1 static 200 --profile`)
+
+`--profile` samples `GCAllocationTick` (one event per ~100 KB), so per-type figures are estimates (±~10% for a type with a 5% share). Sampled 363,217 KB vs 363,149 KB measured. The profiled cell measured 1,859.3 B/req, 11.2 B over the unprofiled 1,848.1 (listener cost). Some types serve both request and response (`HeaderEntry[]`, `HttpContentHeaders`, `HeaderStoreItemInfo`, `String`): they are listed under the object that owns most of them, with the split stated.
+
+| Design object | Type | ~B/req |
+|---|---|---:|
+| O1 `Uri` + URL string | none (static `Uri`) | 0 |
+| O2 `HttpClient` layer | none (`HttpMessageInvoker`) | 0 |
+| O3 `HttpRequestMessage` | `HttpRequestMessage` | 68.8 |
+| O4 request headers | `HttpRequestHeaders` | 48.5 |
+| | `HeaderEntry[]`, request share (h0 → h1 delta minus `HttpRequestHeaders`) | ~88 |
+| O5 forwarded value strings | none (cached strings) | 0 |
+| O6 deadline | none (pooled CTS, no CTS or timer type sampled) | 0 |
+| O7(a) content + content headers | `ReadOnlyMemoryContent` | 66.1 |
+| | `HttpContentHeaders` (request and response content headers) | 123.1 |
+| | `HeaderStoreItemInfo` (parsed `Content-Length` / `Content-Type`) | 69.3 |
+| | `System.Int64` (boxed `Content-Length`) | 39.4 |
+| | `ContentLengthWriteStream` | 46.4 |
+| O8 handler + response | ``Task`1[HttpResponseMessage]`` (handler `SendAsync`) | 147.6 |
+| | `HttpResponseMessage` | 69.8 |
+| | `HttpResponseHeaders` | 51.2 |
+| | `HttpConnectionResponseContent` | 57.0 |
+| | `ContentLengthReadStream` | 48.5 |
+| | ``Node[HttpConnection]`` (pool idle list) | 35.2 |
+| | `HeaderEntry[]`, response and content share | ~264 |
+| | `String` (response header values, mainly `X-Request-Id`) | ~102 |
+| O8 macOS system proxy lookup | `SafeCFStringHandle` 125.8, `SafeCreateHandle` 69.3, `SafeCFDictionaryHandle` 62.9, `SafeCFArrayHandle` 27.7, `CFProxy` 26.1 | 311.8 |
+| | `String` (proxy lookup share) | ~212 |
+| O9 own state machine | none (pooled builder box) | 0 |
+| O10 / C1 gate | not in the spike | n/a |
+| O11-O15 | not exercised (static headers, templates, signing, results, dead letter) | n/a |
+
+Templated, per-type delta (`tpl` vs `static`, None h1, profiled): `String` +222, `UriInfo` +90, `MoreInfo` +65, `Uri` object and the rest ~+30.
+
+Budget (Round 1) vs measured, static ref h1: framework floor estimated 1,380-2,180, measured 1,848.1 with the C6 response and 1,504.1 with `204`. Templated estimated ~1.7-2.6 KB, measured 2,254.4.
+
+### C3 flag result
+
+`DangerousDisablePathAndQueryCanonicalization` saves 0 B: `tpl` and `tpl-raw` match to 0.1 B in every cell (2,254.4 vs 2,254.4 None h1). Rates under this load cannot show its CPU gain. The design's bytes argument for the flag does not hold. A kept flag needs a CPU measurement on an idle machine.
+
+### Connect count result (C6)
+
+Every cell passes: connects after warm-up = connects at the end, so an unread 100 B body never costs a reconnect. `Strict` w1: 1 connection, peak in-flight 1. w500: 1-35 connections (varies by run), all ≤ window. The connection count equals the peak in-flight seen at the fake only in some cells: the pool opens a connection for a queued request that another connection may then serve, so connects ≥ peak in-flight. The harness asserts no growth after warm-up and connects ≤ window, not equality with the fake's peak.
+
+### Notes
+
+- **macOS proxy lookup.** With `UseProxy` default, `SocketsHttpHandler` on macOS asks the system proxy configuration per request: ~524 B/req (CF handles + strings) of the 1,848.1. A one-off run with `UseProxy = false` (not committed) measured 1,319.9 B/req for None h1 static, −539.4 B, at ~3.4× the rate. This is outside relay code, and Linux uses `HttpEnvironmentProxy` instead. The OS a guard ceiling is set on matters.
+- No `AllocationCeilings` change.
+
+### Package cells: method (task 16)
+
+The cells below run the real `Pernix.OutboxRelay.Destination.Http` package. `Infrastructure/HttpMock.cs` builds each `HttpDestination` through `HttpDestinationFactory.Validate` then `Create`, with the production `HttpHandlerFactory.Create` handler (env-only `UseProxy`, so no macOS proxy lookup) and `Infrastructure/HttpLoopback.cs` behind `ConnectCallback`. `Infrastructure/HttpStub.cs` replaces the handler with one preallocated `HttpResponseMessage`, so a stub cell holds only relay-owned bytes and the request objects the relay must build. Response is the C6 `200` unless the cell says `204`.
+
+| Item | Value |
+|---|---|
+| Code | `1c9f8e6` on `avataraps/spec-http-destination` + the task 16 harness changes |
+| Date | 2026-11-26, 21:30-21:45 UTC |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1, arm64, .NET 10.0.15, Release, workstation non-concurrent GC |
+| Other | `otel=False`. **The machine was not idle** (load average 7-20, a 103 5-minute peak at 21:43). Rates are not usable. B/msg repeated to 0.1 B across two full runs |
+
+Commands (repo root):
+
+```sh
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http --response 204
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http --modes None --headers 1 --urls tpl
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-dlq
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http-stub
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- term --modes None,PerKey,Strict --dests http
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- term --modes None --dests http-tpl,http-sat,http-dlq
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- idle --modes None --dests http --seconds 30
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http --socket
+# per-type tables: the same cells with --modes None --headers 1 --profile
+```
+
+Each figure is the `reported` round (3 of 3). `term` dests: `http` static URL, `http-tpl` URL `/orders/{id}?key={key}`, `http-sat` `MaxRequestsInFlight` 8, `http-dlq` `PermanentFaultDestination` main with an Http dead letter. `http` and `http-sat` run the default `MaxRequestsInFlight` 64 and 8 against term batch 500.
+
+### Package cells: destination only (B/msg)
+
+| Cell | h0 | h1 | h4 |
+|---|---:|---:|---:|
+| http None w500 static | 1,224.0 | **1,312.0** | 1,312.0 |
+| http PerKey w500 static | 1,224.0 | 1,312.0 | 1,312.0 |
+| http Strict w1 static | 1,224.0 | 1,312.0 | 1,312.0 |
+| http None w500 static 204 | 880.0 | 968.0 | 968.0 |
+| http PerKey w500 static 204 | 880.0 | 968.0 | 968.0 |
+| http Strict w1 static 204 | 880.0 | 968.0 | 968.0 |
+| http None w500 tpl | | 1,685.6 | |
+| http-dlq None w500 static (B/dlq-msg) | 1,548.9 | 1,548.9 | 1,828.9 |
+| http-dlq PerKey w500 static (B/dlq-msg) | 1,548.9 | 1,548.9 | 1,828.9 |
+| http-dlq Strict w1 static (B/dlq-msg) | 1,536.0 | 1,536.0 | 1,816.0 |
+| http-stub None w500 static | 336.0 | **424.0** | 424.0 |
+| http-stub PerKey w500 static | 336.0 | 424.0 | 424.0 |
+| http-stub Strict w1 static | 336.0 | 424.0 | 424.0 |
+| http-stub None w500 tpl | 501.8 | 589.8 | 589.8 |
+| http-stub PerKey w500 tpl | 501.8 | 589.8 | 589.8 |
+| http-stub Strict w1 tpl | 496.0 | 584.0 | 584.0 |
+| http-stub-dlq None w500 static (B/dlq-msg) | 660.9 | 660.9 | 940.9 |
+| http-stub-dlq PerKey w500 static (B/dlq-msg) | 660.9 | 660.9 | 940.9 |
+| http-stub-dlq Strict w1 static (B/dlq-msg) | 648.0 | 648.0 | 928.0 |
+
+- `http None w500 h1` 1,312.0 vs the spike's hand-written floor with `UseProxy = false` 1,319.9: the package adds no bytes over the floor it was designed against. Budget estimate for the framework floor was 1,380-2,180.
+- h4 = h1 on the main path: 4 forwarded headers fit the first `HeaderEntry[]`. On the dead-letter path the 6 dead-letter headers + 4 forwarded overflow it twice (+280.0 B, a 16-entry `HeaderEntry[]`).
+- Connects (C6): every loopback cell has no growth after warm-up, 1-22 connections at w500 (limit 64), 1 at w1.
+
+### Package cells: term (B/msg)
+
+| Cell | B/msg |
+|---|---:|
+| term None http b500 h1 | **1,504.8** |
+| term PerKey http b500 h1 | 1,504.9 |
+| term Strict http b500 h1 | 1,504.9 |
+| term None http-tpl b500 h1 | 1,888.0 |
+| term None http-sat b500 h1 | 1,504.8 |
+| term None http-dlq b500 h1 (B/dlq-msg) | 2,000.8 |
+| idle None http interval 1s (B/s, rounds 548.3 / 147.5 / 97.9) | 97.9 |
+
+- term − destination-only = 192.8 B/msg, the Core term loop (Kafka term loop share 192-213).
+- `http-sat` = `http` to 0.1 B: a contended gate (8 slots, 500 sends) allocates nothing.
+- `idle` is in the range of `null` 57.1 and `kafka` 95.2 (2026-11-24), with a noisy first round on a loaded machine.
+- Kafka `term None dlq b500 h1` after the `TermHost` change: 919.4 B/dlq-msg vs 895.4 on 2026-11-24 (spread 10.7). Same `DeadLetterTarget` wiring as before, the difference is run noise on a loaded machine.
+
+### Relay-owned bytes vs design targets
+
+Relay-owned = bytes allocated by `Pernix.OutboxRelay.Destination.Http` code. No `Pernix.OutboxRelay.Destination.Http` type appears in any `--profile` table of the loopback and stub cells (`http`, `http-dlq`, `http-stub`, `term http`, `http-tpl`, `http-sat`). The remaining relay-owned bytes are strings it renders, separated by stub deltas.
+
+| Cell | Measured relay-owned | Target | Result |
+|---|---:|---|---|
+| static, `http-stub None w500 h1 static` | 0 B. The 424.0 B are the request objects: `HeaderEntry[]` 175.9 (request + content, 88 each), `HttpRequestMessage` 72.5, `ReadOnlyMemoryContent` 63.4, `HttpContentHeaders` 62.9, `HttpRequestHeaders` 49.6 (sampled) | ≤ 64 B | met |
+| saturated, `term None http-sat b500 h1` | 0 B. Equal to `term None http` (1,504.8), no relay type in the profile | ≤ 64 B | met |
+| templated, `http-stub None w500 h1 tpl` | URL string only (~110 B, sampled `String` 111.9). Delta vs static 165.8 B = that string + `Uri` 51.7 (framework, C3) | ≤ 64 B + URL string | met (0 B beyond the URL string) |
+| dlq, `http-stub-dlq None w500 h1 static` | 84.9 B/dlq-msg: `x-failed-at` string 72 B + `x-original-id` string 12.9 B average (ids ≥ 300 only, .NET caches smaller ones; `Strict` w1 sends id 1 and shows 72 B). The other 152.0 B of the 236.9 B delta vs `http-stub` is the 8-entry request `HeaderEntry[]` that 6 dead-letter + 1 forwarded headers need (framework) | ≤ 192 B | met |
+
+Templated full stack: `http None w500 h1 tpl` − static = +373.6 B. Beyond the relay's URL string and `Uri`, the handler allocates per non-shared `Uri` (`UriInfo`, request-line strings), as in the spike (+406.3).
+
+### Real-socket evidence run
+
+`http --socket` starts this harness as a child process (`http-server`), which serves the same fake through a `TcpListener` on `127.0.0.1`. The parent uses the production handler with no `ConnectCallback`. Child allocations are outside the measured process.
+
+| Cell (h1, static, 200) | In-memory | Real socket | Delta |
+|---|---:|---:|---:|
+| http None w500 | 1,312.0 | 2,030.5 | +718.5 |
+| http PerKey w500 | 1,312.0 | 2,030.4 | +718.4 |
+| http Strict w1 | 1,312.0 | 1,655.4 | +343.4 |
+
+h0 / h4 move by the same amounts (None w500 h0 1,942.5, Strict w1 h0 1,567.4). Per type (`--profile`, None w500 h1): `StateMachineBox<DeliveryResult, HttpDestination.<SendAsync>>` ~332 B/msg, `HttpConnection.SendAsync` box ~262, `HttpConnectionPool.SendWithVersionDetectionAndRetryAsync` box ~223. Strict w1: no `HttpDestination` box, the two framework boxes ~160 + ~117.
+
+**Miss: O9 (own state machine, target 0) holds only in-memory.** On a real socket, reads complete asynchronously, so every send suspends and needs a box. At w1 the `PoolingAsyncValueTaskMethodBuilder` cache returns the one box in use, and the relay allocates 0. At w500 up to 500 sends are suspended at once, more than that builder's small per-thread and per-core cache holds, so ~332 B/msg of relay-owned boxes are allocated. The in-memory loopback hides this. The relay-owned targets above are met for the loopback and stub cells they are defined on. The framework boxes on the socket path (~385-485 B/msg) are framework floor. No `AllocationCeilings` change.
+
+### O9 real-socket spike
+
+Foreman ruling O1 (bounded): can `DOTNET_SYSTEM_THREADING_POOLINGASYNCVALUETASKSCACHESIZE` or flattening `HttpDestination.SendAsync` remove the ~332 B/msg `StateMachineBox` of the real-socket w500 cell above? Result: **GAP**. Neither removes it.
+
+| Item | Value |
+|---|---|
+| Code | `30eebc3` on `avataraps/spec-http-destination` + a harness line that prints retained heap and working set after each `http` cell (full blocking compacting GC, `GCMemoryInfo.HeapSizeBytes`, `Environment.WorkingSet`) |
+| Date | 2026-11-26, 21:51-21:55 UTC |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1, arm64, .NET 10.0.15, Release, workstation non-concurrent GC |
+| Other | `otel=False`. **The machine was not idle** (1-minute load average 8-30, 5-minute 37-49). Rates are not usable for small differences. B/msg repeated to 0.1 B across all runs |
+
+Commands (repo root), each 3 times unprofiled and 3 times with `--profile`, per setting `unset`, `64`, `256`, `512`:
+
+```sh
+DOTNET_SYSTEM_THREADING_POOLINGASYNCVALUETASKSCACHESIZE=<n> \
+  dotnet run -c Release --no-build --project benchmarks/Pernix.OutboxRelay.Benchmarks -- http --socket --modes None,Strict --headers 1 --urls static [--profile]
+```
+
+#### The knob does not exist in .NET 10
+
+- The .NET 10 builder reads no configuration. `PoolingAsyncValueTaskMethodBuilderT.cs` on `release/10.0` (dotnet/runtime, last product change `53af66a48`, 2023-06-05) holds a fixed cache per state machine type: one box per thread (`[ThreadStatic] t_tlsCache`, "This currently only ever stores one") and one box per core (`s_perCoreCache = new PaddedReference[Environment.ProcessorCount]`). There is no `AppContext` switch, no runtimeconfig property and no environment read.
+- `System.Private.CoreLib.dll` 10.0.15 on this machine contains no `POOLINGASYNC` string (UTF-16 scan of the binary).
+- The only reference in dotnet/runtime is `PoolingAsyncValueTaskMethodBuilderTests.cs`, which still sets the variable on a remote process. That is a leftover from the .NET 6 preview builder (configurable `s_maxCacheSize`), which the .NET 6 release replaced with the fixed per-thread + per-core cache.
+- On this machine the cache holds at most 12 + (threads) boxes. 500 suspended sends always overflow it.
+
+#### Knob measurements (median of 3, h1 static 200)
+
+| Setting | None w500 B/msg | `HttpDestination` box ~B/msg (sampled) | None w500 msg/s | None retained heap KB | None working set MB | Strict w1 B/msg | Strict w1 msg/s | Strict retained heap KB |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| unset | 2,030.5 | 356.5 | 166,353 | 1,368 | 87.2 | 1,656.0 | 28,438 | 356 |
+| 64 | 2,030.5 | 349.6 | 171,856 | 1,379 | 87.2 | 1,655.9 | 26,710 | 370 |
+| 256 | 2,030.4 | 355.5 | 162,676 | 1,377 | 86.7 | 1,656.0 | 27,111 | 367 |
+| 512 | 2,030.5 | 321.4 | 171,034 | 1,368 | 86.7 | 1,656.0 | 29,581 | 355 |
+
+- B/msg is equal to 0.1 B across all four settings, and equal to the 30eebc3 run (2,030.5 / 1,655.4). Retained heap and working set do not move beyond run noise. The knob is a no-op, as the source says.
+- The box figure is `GCAllocationTick` sampled (±~10% at a 15-17% share). All 12 profiled runs: 316.5-362.4, median 348.6 B/msg. The per-setting spread is sampling noise, not a trend (512 is lowest, 64 is not).
+- Strict w1: no `HttpDestination` box in any profile, as before.
+
+#### Flatten
+
+Not changed. `SendAsync` is already one relay state machine on the static path: `HttpSendGate.AcquireAsync` returns a `ValueTask` backed by the gate's own `IValueTaskSource` (no box), and the other async methods (`ReadMappedBodyAsync`, `ClassifyAsync`) run only with a request mapper with signing or a response classifier. The sync fast path already exists: an `async ValueTask` method that completes without suspending allocates no box, which is why the in-memory and stub cells show 0 B. On a real socket `invoker.SendAsync` completes asynchronously, so the send must suspend and needs a box. No flattening removes that suspension. `HttpDestination.cs` is unchanged.
+
+#### Decision
+
+**GAP.** No product or Host runtimeconfig change. Residual relay-owned bytes on `http socket None w500 h1 static 200`: **~350 B/msg** (sampled median 348.6, range 316-362), the `StateMachineBox<DeliveryResult, HttpDestination.<SendAsync>>` of each suspended send beyond the fixed builder cache. `Strict w1` relay-owned: 0 B. Totals that ship: None w500 h1 2,030.5 B/msg, Strict w1 h1 1,656.0 B/msg. `dotnet test --project tests/Pernix.OutboxRelay.Unit.Tests --filter-namespace Pernix.OutboxRelay.Unit.Tests.Http`: 523 passed, 0 failed. No `AllocationCeilings` change.
+
+### HTTP/2 cleartext cell (task 17)
+
+`HttpLoopback(status, http2: true)` serves prior-knowledge h2c through the same `ConnectCallback` path as the h1 cells, so neither uses TLS and the comparison is like for like. `Infrastructure/Http2LoopbackFramer.cs` reads the 24 B preface and 9 B frame headers and skips payloads. It sends `SETTINGS` (`MAX_CONCURRENT_STREAMS` 100, the Kestrel default), acks the client's `SETTINGS`, and sends a connection `WINDOW_UPDATE` per non-empty `DATA` (plus a stream one when `END_STREAM` is not set). It ignores `PRIORITY`, `PING`, `WINDOW_UPDATE`, `RST_STREAM` and `GOAWAY`. Each stream gets one preformatted `HEADERS` frame (`0x88` `:status 200`, then the C6 headers as literals without indexing, `x-request-id` overwritten in place) and one `DATA` frame with `END_STREAM`. All buffers are fixed and there is no HPACK encoder. The file is 362 lines, of which ~90 are `Stream` boilerplate shared in shape with the h1 fake. Term dest `http2` = `HttpVersion` `"2-cleartext"`, static URL, default `MaxRequestsInFlight` 64, so one connection.
+
+| Item | Value |
+|---|---|
+| Code | `16b9593` on `avataraps/spec-http-destination` + the task 17 harness changes |
+| Date | 2026-11-26, 22:10-22:14 UTC |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1, arm64, .NET 10.0.15, Release, workstation non-concurrent GC |
+| Other | `otel=False`. Load average 5-7. Rates are not usable |
+
+```sh
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- loopback --http2
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- loopback --http2 --response 204
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- term --modes None --dests http2,http
+dotnet run -c Release --project benchmarks/Pernix.OutboxRelay.Benchmarks -- term --modes None --dests http2 --profile
+```
+
+| Cell | B/req or B/msg |
+|---|---:|
+| loopback h2 200 | 0.0 |
+| loopback h2 204 | 0.0 |
+| term None http2 b500 h1 | **4,049.9** (second run 4,042.2) |
+| term None http b500 h1 (same run, h1 unchanged) | 1,504.8 |
+
+The h2 fake allocates 0.0 B/req (limit 8), so the `http2` cell stays a guard cell candidate and no fallback is taken. The h1 `loopback` 200/204 stay 0.0 and `term None http` stays 1,504.8 after the shared `HttpLoopback` changes. Unlike h1, h2 B/msg varies by a few B between runs: the response arrives on the connection's background read loop, so how many sends suspend at once differs per run.
+
+Per type (`--profile`, reported round, two runs):
+
+| Type | ~B/msg | Owner |
+|---|---:|---|
+| `StateMachineBox<DeliveryResult, HttpDestination.<SendAsync>>` | 420.5 / 440.7 | relay |
+| `HeaderEntry[]` | 323.0 | framework (request + response headers) |
+| `HttpConnectionPool.SendWithVersionDetectionAndRetryAsync` box | 253.1 | framework |
+| `Http2Stream` | 220.6 | framework |
+| `Task` | 190.8 | framework |
+| `Http2Connection.SendAsync` box | 187.1 | framework |
+| `Http2Stream.SendDataAsync`, `SendRequestBodyAsync`, `SendHeadersAsync`, `SendStreamDataAsync`, `ReadResponseHeadersAsync` boxes | 742.3 | framework |
+| `WriteQueueEntry` (3 shapes) | 265.4 | framework (h2 write queue: headers, data, window updates) |
+| `String` | 130.6 / 127.4 | framework (HPACK-decoded header values) |
+| `HttpContentHeaders`, `HttpResponseMessage`, `HttpRequestMessage`, `ReadOnlyMemoryContent`, `Http2WriteStream` | 437.0 | framework |
+| `ContingentProperties`, `CallbackNode`, `Registrations` | 233.9 | framework (per-stream cancellation registration) |
+| `HeldRow` | 60.8 | Core term loop |
+
+**Miss: relay-owned target ≤ 64 B/msg is not met under h2.** Relay-owned = ~430 B/msg (sampled 420.5-440.7), all of it the `HttpDestination.<SendAsync>` box. This is the O9 mechanism seen on the real socket (~350 B/msg there): h2 completes every response on the connection's read loop, so every in-memory send suspends, and 64 concurrent suspended sends exceed the `PoolingAsyncValueTaskMethodBuilder` cache. Relay code does not depend on version. No other `Pernix.OutboxRelay.Destination.Http` type appears in the profile.
+
+Framework floor under h2: term total 4,049.9 − relay box ~430 − Core term loop share 192.8 (from the h1 term vs destination-only delta) ≈ **3,430 B/msg**, vs the h1 in-memory floor 1,312.0. Most of the extra comes from the h2 stack's per-stream async state machines, `Http2Stream`, and write-queue entries. Recorded, not targeted. No `AllocationCeilings` change here: task 18 sets the `term None http2 b500 h1` row from guard runs.
+
+### Allocation guard: Http ceilings (task 18)
+
+`AllocationGuardTests` gains the 9 Http guard cells from the design. Task 17 took no fallback, so `term None http2 b500 h1` is a guard cell. Term/1 (`None,PerKey`) and Term/3 (`Strict`) gain `http`. A new `Http` fact runs `Http/1` (`term --modes None --dests http-tpl,http-sat,http-dlq,http2`, 200,000 msgs, 50,000 warm-up) and `Http/2` (`http-stub --modes None --headers 1 --urls static`, whose row `http-stub None w500 h1 static 200` is the cell `http-stub None w500 h1`). Idle gains `Idle/2` (`idle --modes None --dests http --seconds 120 --rounds 1`).
+
+| Item | Value |
+|---|---|
+| Code | `c9fe4f1` on `avataraps/spec-http-destination` + the task 18 guard changes (test code only) |
+| Date | 2026-11-26, 5 full guard runs 22:20:29-23:52:08 UTC, ~18 min each |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1 (26B131), arm64, .NET 10.0.15, Release, header `gcServer=False latency=Batch runtimeEvents=off profile=False otel=False` |
+| Other | The only worker running. Load average 3.4-31.5 (1 min). Docker 29.9.3, `postgres:17.11` |
+| Runs | 5 runs of `dotnet test --project tests/Pernix.OutboxRelay.Unit.Tests --filter-class "Pernix.OutboxRelay.Unit.Tests.Allocation.AllocationGuardTests" --explicit only --output Detailed` with the 9 Http rows unset. `reported` round, median |
+
+Ceilings: limit = median + margin, the existing rules: margin = max(10% of median, 3 × spread), idle margin = max(3 × spread, 200 B/s). Every Http row takes the 10% rule (or idle 200 B/s). `term None http2` spread 11.1 B, 3 × 33.3 < 405.8.
+
+| Cell | Unit | Run 1 | Run 2 | Run 3 | Run 4 | Run 5 | Median | Spread | Margin | Ceiling |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| http-stub None w500 h1 | msg | 424.0 | 424.0 | 424.0 | 424.0 | 424.0 | 424.0 | 0.0 | 42.4 | 466.4 |
+| term None http b500 h1 | msg | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 0.0 | 150.5 | 1,655.3 |
+| term PerKey http b500 h1 | msg | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 0.0 | 150.5 | 1,655.4 |
+| term Strict http b500 h1 | msg | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 0.0 | 150.5 | 1,655.4 |
+| term None http-tpl b500 h1 | msg | 1,888.0 | 1,888.0 | 1,888.0 | 1,888.0 | 1,888.0 | 1,888.0 | 0.0 | 188.8 | 2,076.8 |
+| term None http-sat b500 h1 | msg | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 0.0 | 150.5 | 1,655.3 |
+| term None http-dlq b500 h1 | dlq-msg | 2,000.8 | 2,000.8 | 2,000.8 | 2,000.8 | 2,000.8 | 2,000.8 | 0.0 | 200.1 | 2,200.9 |
+| term None http2 b500 h1 | msg | 4,050.5 | 4,051.7 | 4,058.2 | 4,061.6 | 4,058.5 | 4,058.2 | 11.1 | 405.8 | 4,464.0 |
+| idle None http interval 1s | s | 98.6 | 109.0 | 99.5 | 98.8 | 119.9 | 99.5 | 21.3 | 200.0 | 299.5 |
+
+`Exceeds` on the h1 loopback term rows is the spike's `UseProxy` default vs off delta (−539.4 B/req, `http-floor None w500 h1 static`): restoring the macOS system proxy lookup would cross each of those ceilings. The stub has no handler, and the h2 and idle cells have no measured reduction, so those rows say `none`. The http2 ceiling includes the known relay-owned `HttpDestination.<SendAsync>` box (~430 B/msg, O9 gap, see "HTTP/2 cleartext cell") and does not hide it: it guards against growth beyond it.
+
+Existing 24 ceilings are unchanged and pass in all 5 runs on this machine. Medians (spread), B per unit:
+
+| Cell | Median | Spread | Ceiling |
+|---|---:|---:|---:|
+| term None null b500 h1 | 192.8 | 0.0 | 212.1 |
+| term None kafka b500 h1 | 208.6 | 8.4 | 260.9 |
+| term None dlq b500 h1 | 918.8 | 9.1 | 1,010.7 |
+| term PerKey null b500 h1 | 192.9 | 0.0 | 212.2 |
+| term PerKey kafka b500 h1 | 191.6 | 0.1 | 210.8 |
+| term PerKey dlq b500 h1 | 929.0 | 1.3 | 1,022.8 |
+| term Strict null b500 h1 | 192.9 | 0.0 | 212.2 |
+| term Strict kafka b500 h1 | 248.4 | 0.0 | 273.2 |
+| term Strict dlq b500 h1 | 992.4 | 0.0 | 1,091.6 |
+| session None batch 500 h1 | 319.6 | 0.8 | 352.3 |
+| session PerKey batch 500 h1 | 319.3 | 0.2 | 351.2 |
+| session Strict batch 500 h1 | 320.0 | 1.3 | 351.9 |
+| None / PerKey / Strict read-empty | 1,064.3 | 0.0 | 1,170.7 |
+| None / PerKey / Strict check | 1,328.3 | 0.0 | 1,461.1 |
+| idle None null interval 1s | 117.9 | 57.6 | 335.2 |
+| idle None kafka interval 1s | 74.3 | 27.7 | 292.0 |
+| idle PerKey null interval 1s | 85.5 | 28.8 | 296.9 |
+| idle PerKey kafka interval 1s | 97.1 | 20.7 | 295.7 |
+| idle Strict null interval 1s | 84.5 | 20.7 | 284.5 |
+| idle Strict kafka interval 1s | 105.7 | 49.8 | 295.0 |
+
+`term None dlq` 918.8 equals the median its ceiling was set from at `835b04a`, so the ~919 seen in task 16 is not a regression. `FlatTerm`, `FlatSession` and `Churn` passed in all 5 runs.
+
+Verify run with the ceilings set, same code and machine, 2026-11-26 23:53:15 UTC to 2026-11-27 00:11:27 UTC: 8/8 facts passed, 33/33 cells pass (`term None http2` 4,058.8, `idle None http` 120.7, every other Http cell equal to its median). No `AllocationCeilings` change to the existing 24 rows.

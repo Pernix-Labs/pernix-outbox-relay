@@ -2,7 +2,7 @@
 
 **Publish an event if and only if your transaction commits.**
 
-Outbox Relay is a transactional outbox for .NET and PostgreSQL. The producer inserts the event as a row in an outbox table, in the same transaction as the business change. The relay polls the table and delivers each row to a Kafka topic, at least once and in the configured order.
+Outbox Relay is a transactional outbox for .NET and PostgreSQL. The producer inserts the event as a row in an outbox table, in the same transaction as the business change. The relay polls the table and delivers each row to a Kafka topic or an HTTP endpoint, at least once and in the configured order.
 
 [![CI](https://github.com/Pernix-Labs/pernix-outbox-relay/actions/workflows/ci.yml/badge.svg)](https://github.com/Pernix-Labs/pernix-outbox-relay/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -110,6 +110,7 @@ A service that changes its database and then publishes an event loses the event 
 
 - **Atomic.** The outbox row commits with the business change or not at all.
 - **At least once, in order.** Three ordering modes per outbox: `None`, `PerKey`, `Strict`. Retries with backoff, then dead letter, drop or block.
+- **Kafka or HTTP.** Deliver to a Kafka topic, or send each row as one HTTP request with the raw payload as body: URL and header placeholders, status-code contract, OAuth2 and API key auth, Standard Webhooks signing, mTLS. [Http](docs/configuration.md#http).
 - **One leader per outbox.** Replicas elect a leader through a PostgreSQL session advisory lock. No extra coordinator.
 - **Allocation-conscious hot path.** Measured, not estimated: see [Performance](#performance).
 - **Two ways to run.** A container image, or the same relay embedded in your own .NET host.
@@ -128,7 +129,8 @@ Relay side, `net10.0`, embedded in your host:
 ```shell
 dotnet add package Pernix.OutboxRelay.Hosting
 dotnet add package Pernix.OutboxRelay.Outbox.PostgreSql
-dotnet add package Pernix.OutboxRelay.Destination.Kafka
+dotnet add package Pernix.OutboxRelay.Destination.Kafka   # Kafka destinations
+dotnet add package Pernix.OutboxRelay.Destination.Http    # Http destinations
 ```
 
 Or run the image: `ghcr.io/pernix-labs/pernix-outbox-relay:<version>`.
@@ -138,12 +140,13 @@ Or run the image: `ghcr.io/pernix-labs/pernix-outbox-relay:<version>`.
 | `Pernix.OutboxRelay.Client` | Producer | Contracts: `OutboxMessage`, `OutboxHeaders`, `IOutboxPublisher`. |
 | `Pernix.OutboxRelay.Client.PostgreSql` | Producer | PostgreSQL publisher (`AddPostgreSqlOutboxPublisher`) and the outbox DDL scripts (`PostgreSqlOutboxSchema`). |
 | `Pernix.OutboxRelay.Client.EntityFrameworkCore` | Producer | EF Core queue (`UseOutbox`, `AddOutboxQueue`, `IOutboxQueue<TContext>`). |
-| `Pernix.OutboxRelay.Core` | Relay | Relay engine and provider abstractions. Referenced by the other three. |
+| `Pernix.OutboxRelay.Core` | Relay | Relay engine and provider abstractions. Referenced by the other four. |
 | `Pernix.OutboxRelay.Hosting` | Relay | `AddOutboxRelay`, health checks, telemetry helpers. Registers no outbox provider or destination. |
 | `Pernix.OutboxRelay.Outbox.PostgreSql` | Relay | PostgreSQL outbox provider (`AddPostgreSqlOutbox`). |
 | `Pernix.OutboxRelay.Destination.Kafka` | Relay | Kafka destination (`AddKafkaDestination`). |
+| `Pernix.OutboxRelay.Destination.Http` | Relay | Http destination (`AddHttpDestination`). |
 
-Releases are cut from tags: `client/vX.Y.Z` publishes the three client packages, `relay/vX.Y.Z` publishes the image and the four relay packages at one version. Install every client package at one version. No version is released yet. The first tags will be `client/v1.0.0` and `relay/v1.0.0` ([Release](docs/development.md#release)).
+Releases are cut from tags: `client/vX.Y.Z` publishes the three client packages, `relay/vX.Y.Z` publishes the image and the five relay packages at one version. Install every client package at one version. No version is released yet. The first tags will be `client/v1.0.0` and `relay/v1.0.0` ([Release](docs/development.md#release)).
 
 ## Quick start
 
@@ -346,6 +349,7 @@ Allocated bytes per delivered message on the relay's hot path. Median of 3 runs,
 - **0 B per Kafka send**, with 0, 1 or 4 headers, in every ordering mode.
 - **57-132 B/s** for an idle leader polling an empty outbox every second.
 - **Flat heap** over 1M delivered messages and 1M rows read.
+- **Http destination:** 1,504.8 B/msg on the delivery loop over HTTP/1.1, measured separately. Known v1 gap: ~350 B/msg relay-owned on a real socket with many sends in flight. [Http destination](BENCHMARKS.md#http-destination).
 
 > _Measured on `main` at `ecc4861`, 2026-11-24: Apple M6, .NET 10.0.15, `postgres:17.11` in a local container, librdkafka mock cluster. These are allocation figures, not throughput. Absolute numbers vary by hardware and runtime. Every table, the method, the limits of the run and how to reproduce it: [`BENCHMARKS.md`](BENCHMARKS.md)._
 
@@ -355,7 +359,7 @@ Allocated bytes per delivered message on the relay's hot path. Median of 3 runs,
 |---|---|
 | [`docs/client-packages.md`](docs/client-packages.md) | Producer guide for the client packages. |
 | [`docs/embedding.md`](docs/embedding.md) | Run the relay inside your own .NET host. |
-| [`docs/configuration.md`](docs/configuration.md) | Configuration, environment variables, startup validation, PostgreSQL prerequisites, Kafka, health, metrics. |
+| [`docs/configuration.md`](docs/configuration.md) | Configuration, environment variables, startup validation, PostgreSQL prerequisites, Kafka, Http, health, metrics. |
 | [`docs/delivery.md`](docs/delivery.md) | Ordering modes, write-order rule, failure policy, dead letters, operator actions. |
 | [`docs/runbook.md`](docs/runbook.md) | Deploy, alerts, incidents. |
 | [`BENCHMARKS.md`](BENCHMARKS.md) | What is measured, latest results, how to reproduce. |

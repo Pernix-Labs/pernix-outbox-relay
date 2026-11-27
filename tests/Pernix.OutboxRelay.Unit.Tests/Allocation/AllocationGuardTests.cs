@@ -33,9 +33,15 @@ public sealed class AllocationGuardTests
 
     private static readonly CellRun[] TermRuns =
     [
-        new("Term/1", "term --modes None,PerKey --dests null,kafka --headers 1 --batches 500 --n 200000 --warm 50000 --rounds 3", 200_000, Shape.Term, RunTimeout),
+        new("Term/1", "term --modes None,PerKey --dests null,kafka,http --headers 1 --batches 500 --n 200000 --warm 50000 --rounds 3", 200_000, Shape.Term, RunTimeout),
         new("Term/2", "term --modes None,PerKey --dests dlq --headers 1 --batches 500 --n 50000 --warm 10000 --rounds 3", 50_000, Shape.Term, RunTimeout),
-        new("Term/3", "term --modes Strict --dests null,kafka,dlq --headers 1 --batches 500 --n 20000 --warm 5000 --rounds 3", 20_000, Shape.Term, RunTimeout),
+        new("Term/3", "term --modes Strict --dests null,kafka,dlq,http --headers 1 --batches 500 --n 20000 --warm 5000 --rounds 3", 20_000, Shape.Term, RunTimeout),
+    ];
+
+    private static readonly CellRun[] HttpRuns =
+    [
+        new("Http/1", "term --modes None --dests http-tpl,http-sat,http-dlq,http2 --headers 1 --batches 500 --n 200000 --warm 50000 --rounds 3", 200_000, Shape.Term, RunTimeout),
+        new("Http/2", "http-stub --modes None --headers 1 --urls static --n 200000 --warm 50000 --rounds 3", 200_000, Shape.Stub, RunTimeout),
     ];
 
     private static readonly CellRun SessionRun =
@@ -43,7 +49,11 @@ public sealed class AllocationGuardTests
 
     private static readonly CellRun FixedRun = new("Fixed", "fixed --modes None,PerKey,Strict --rounds 3", 1_000, Shape.Fixed, RunTimeout);
 
-    private static readonly CellRun IdleRun = new("Idle", "idle --modes None,PerKey,Strict --dests null,kafka --seconds 120 --rounds 1", 120, Shape.Idle, IdleTimeout);
+    private static readonly CellRun[] IdleRuns =
+    [
+        new("Idle/1", "idle --modes None,PerKey,Strict --dests null,kafka --seconds 120 --rounds 1", 120, Shape.Idle, IdleTimeout),
+        new("Idle/2", "idle --modes None --dests http --seconds 120 --rounds 1", 120, Shape.Idle, IdleTimeout),
+    ];
 
     private enum Shape
     {
@@ -51,10 +61,14 @@ public sealed class AllocationGuardTests
         Session,
         Fixed,
         Idle,
+        Stub,
     }
 
     [Fact(Explicit = true)]
     public Task Term() => CellsAsync(TermRuns);
+
+    [Fact(Explicit = true)]
+    public Task Http() => CellsAsync(HttpRuns);
 
     [Fact(Explicit = true)]
     public Task Session() => CellsAsync([SessionRun]);
@@ -63,7 +77,7 @@ public sealed class AllocationGuardTests
     public Task Fixed() => CellsAsync([FixedRun]);
 
     [Fact(Explicit = true)]
-    public Task Idle() => CellsAsync([IdleRun]);
+    public Task Idle() => CellsAsync(IdleRuns);
 
     [Fact(Explicit = true)]
     public Task FlatTerm() => FlatAsync("FlatTerm", FlatTermArgs, term: true);
@@ -275,7 +289,7 @@ public sealed class AllocationGuardTests
         var matches = 0;
         foreach (var row in rows)
         {
-            if (HarnessOutput.Matches(row.Name, cell.Name, cell.Prefix))
+            if (HarnessOutput.Matches(row.Name, cell.Row ?? cell.Name, cell.Prefix))
             {
                 found = row;
                 matches++;
@@ -441,7 +455,8 @@ public sealed class AllocationGuardTests
     private static ITestOutputHelper Output() =>
         TestContext.Current.TestOutputHelper ?? throw new InvalidOperationException("No test output helper");
 
-    private sealed record ExpectedCell(string Name, bool Prefix, string Mode, string? Dest, string? ShapeLine = null);
+    // Row: the harness row name when it differs from the ceiling cell name.
+    private sealed record ExpectedCell(string Name, bool Prefix, string Mode, string? Dest, string? ShapeLine = null, string? Row = null);
 
     private sealed record CellRun(string Label, string Args, long Count, Shape Shape, TimeSpan Timeout)
     {
@@ -479,6 +494,14 @@ public sealed class AllocationGuardTests
                         {
                             var name = $"idle {mode} {dest} interval 1s";
                             cells.Add(new(name, false, mode, dest, HarnessOutput.IdleShapeLine(name, IdleWarmUpSeconds, Count)));
+                        }
+
+                        break;
+                    case Shape.Stub:
+                        foreach (var headers in Option("--headers")!.Split(','))
+                        {
+                            var name = $"http-stub {mode} w{(mode == "Strict" ? 1 : 500)} h{headers}";
+                            cells.Add(new(name, false, mode, null, Row: $"{name} {Option("--urls")} 200"));
                         }
 
                         break;

@@ -1,0 +1,118 @@
+# Journal: 2026-11-26-http-destination
+run: run_a1ffd40fb56b
+
+- 2026-11-26T19:41:57Z run-created — run_a1ffd40fb56b
+- 2026-11-26T19:41:57Z supervised — task task_7dc14f5f52df dispatch ctx_f0d0928044ce
+- 2026-11-26T19:45:39Z gate — ask gate_18f6b4c052cb on task_83f1c3508f12 (status completed): requirements.md review, Q1-Q10 open
+- 2026-11-26T19:46:27Z gate — requirements.md approve (foreman, human delegated Q1-Q10; answers to be recorded in doc before flip)
+- 2026-11-26T19:47:38Z note — requirements.md approved, Q1-Q10 recorded (task_47300b9bcc58)
+- 2026-11-26T19:55:16Z note — R3 round 1 challenge sent to architect (C1-C9)
+- 2026-11-26T19:58:34Z note — R3 agreed after round 1, 3 conditions (gate cancellation, context pool retention, dot-segment fault)
+- 2026-11-26T19:59:58Z note — design.md review: 3 objections (D1 gate tombstone reuse, D2 callback lifetime, D3 ObjectDisposedException) to architect
+- 2026-11-26T20:01:02Z note — design.md D1-D3 verified; D4 (registration dispose under gate lock deadlock) to architect
+- 2026-11-26T20:02:10Z gate — ask gate_36f8cb48ae84 on task_b4000bb06009 (status completed): design.md review, R3 agreed
+- 2026-11-26T20:02:42Z gate — design.md approve (foreman), amendment: declarative HttpVersion setting 1.1|2 + http2 guard cell or recorded reason
+- 2026-11-26T20:04:16Z note — design.md approved, HttpVersion amendment folded (task_c3c2db468f70)
+- 2026-11-26T20:08:34Z gate — ask gate_70e5516e56e5 on task_e98fcae0a873 (status completed): tasks.md review, 19 tasks, validate-dag OK depth 9
+- 2026-11-26T20:10:22Z gate — tasks.md approve (foreman). Note: tasks 15/18 measurements with no other workers active; noisy ceiling run -> rerun, never widen
+- 2026-11-26T20:10:45Z dag-materialized — 19 created, 0 replaced, 0 orphaned, 0 unchanged (map: .claude/orca-spec/runs/run_a1ffd40fb56b/dag-map.json)
+- 2026-11-26T20:11:35Z note — DAG materialized (19), architect disposed; dispatched 3 (ctx_4a4a4cb400b7), 2 (ctx_5916f0006e06)
+- 2026-11-26T20:12:33Z worker_done — coord 2, sha fb9946b, Core DeadLetterHeaderNames, Kafka aliases, unit green
+- 2026-11-26T20:12:33Z verify-minted — coord 2 round 1, task task_f42ea73b38b5
+- 2026-11-26T20:13:36Z verdict — coord 2 APPROVE
+- 2026-11-26T20:15:17Z note — task 3 question msg_0e50602370bb: Core binder rejects array keys; asked foreman msg_016c54c307f1 (O1 Core IsAccepted array support recommended)
+- 2026-11-26T20:15:43Z note — foreman ruling msg_016c54c307f1: O1, Core changes = DeadLetterHeaderNames + binder array-index support (scalar T only). Record in design.md/NG14 and ADR 0015 (task 19). Replied to task 3.
+- 2026-11-26T20:20:19Z worker_done — coord 3, sha 5b262eb, scaffold + Core binder scalar-list support (foreman O1)
+- 2026-11-26T20:20:19Z verify-minted — coord 3 round 1, task task_b3dfd2a1828f
+- 2026-11-26T20:22:02Z verdict — coord 3 APPROVE
+- 2026-11-26T20:25:51Z worker_done — coord 1, sha 5088422, floor 1848 B/req ref cell, UseProxy default ~539 B/req on macOS
+- 2026-11-26T20:25:51Z verify-minted — coord 1 round 1, task task_e3b15eb22495
+- 2026-11-26T20:26:22Z note — task 9 a319e39 reported before UseProxy note; follow-up ctx_d91f7148811e (UseProxy only when proxy env vars set, measured ~539 B/req macOS) runs in its terminal; impl-done for 9 waits for follow-up sha
+- 2026-11-26T20:27:03Z worker_done — coord 9, sha a4e1257, a319e39 handler factory + a4e1257 UseProxy env gate (coordinator decision, measured)
+- 2026-11-26T20:27:03Z verify-minted — coord 9 round 1, task task_eee3b47f7a3c
+- 2026-11-26T20:28:11Z verdict — coord 9 APPROVE
+- 2026-11-26T20:28:11Z note — task 9 verifier note: ProxyConfigured matches env names case-insensitively; fix to exact upper/lower names in the pending one-off fix-up
+- 2026-11-26T20:29:10Z verdict — coord 1 APPROVE
+- 2026-11-26T20:29:35Z note — one-off fix-up task_35ff7a69c972 (ctx_e6f2bc52ca63): record binder ruling, UseProxy decision, C6 connect wording in spec; exact-case proxy names; task 1 nits
+- 2026-11-26T20:32:31Z worker_done — coord 7, sha 12a3c56, AuthPlan + OAuth2TokenCache, fast path 0 B
+- 2026-11-26T20:32:31Z verify-minted — coord 7 round 1, task task_a2c1cd22e323
+- 2026-11-26T20:33:36Z rework-minted — coord 7 round 1, task task_42668b30fdc2
+- 2026-11-26T20:35:43Z worker_done — coord 7, sha 3fbf2c4, rework: missing expires_in cached until 401
+- 2026-11-26T20:35:43Z verify-minted — coord 7 round 2, task task_3d6e6fe1f12c
+- 2026-11-26T20:36:10Z worker_done — coord 4, sha 9f0e44d, ValueTemplate; API split per target (TryRenderUrl/TryRenderHeaderValue)
+- 2026-11-26T20:36:10Z verify-minted — coord 4 round 1, task task_598794ee4937
+- 2026-11-26T20:36:39Z verdict — coord 7 APPROVE
+- 2026-11-26T20:37:42Z verdict — coord 4 APPROVE
+- 2026-11-26T20:37:42Z note — for task 11: compile-time RFC 9110 token check on {header:<name>} placeholder names (task 4 verifier note)
+- 2026-11-26T20:42:25Z worker_done — coord 5, sha c2fa9c3, header forwarding + caches
+- 2026-11-26T20:42:26Z verify-minted — coord 5 round 1, task task_c52db56577d4
+- 2026-11-26T20:42:26Z worker_done — coord 8, sha 1e75806, signing
+- 2026-11-26T20:42:26Z verify-minted — coord 8 round 1, task task_f5d7e72fb97d
+- 2026-11-26T20:44:18Z verdict — coord 8 APPROVE
+- 2026-11-26T20:44:18Z rework-minted — coord 5 round 1, task task_930bc894d367
+- 2026-11-26T20:44:31Z note — for task 11/12 (task 8 verifier): signing header names (webhook-id/-timestamp/-signature, Signing.HeaderName) join the overridden set so Headers entries never duplicate them; SigningPlan/compile rejects a content-header Signing.HeaderName
+- 2026-11-26T20:46:09Z worker_done — coord 5, sha 803abdf, rework: content headers routed to content
+- 2026-11-26T20:46:09Z verify-minted — coord 5 round 2, task task_c614674ace50
+- 2026-11-26T20:47:31Z verdict — coord 5 APPROVE
+- 2026-11-26T20:51:22Z worker_done — coord 6, sha feae110, gate+context+slot, 20/20 runs, contended 0 B
+- 2026-11-26T20:51:23Z verify-minted — coord 6 round 1, task task_c82a525f70a9
+- 2026-11-26T20:55:45Z verdict — coord 6 APPROVE
+- 2026-11-26T20:55:45Z note — task 6 verifier notes: (1) gate createSlot throw leaks slot, (2) check 9 misses suspended-await path -> one-off fix-up pending; (3) SendAsync maps slot-wait OCE to SlotWaitTimeout -> task 12
+- 2026-11-26T20:59:00Z worker_done — coord 10, sha d040b81, dead-letter headers, 2 strings/send
+- 2026-11-26T20:59:00Z verify-minted — coord 10 round 1, task task_6feb63365e1a
+- 2026-11-26T21:00:36Z verdict — coord 10 APPROVE
+- 2026-11-26T21:00:43Z note — task 10 approved; one-off fix-up 2 task_0c2bc3d9a130 (ctx_915aaf8b5938): gate createSlot leak, suspended-await 0 B test, UTF-8 request header encoding (non-ASCII values would pause outbox)
+- 2026-11-26T21:02:02Z worker_done — coord 11, sha fd34af5, plan compiler + 4 coordinator rules; {outbox} folds per outbox
+- 2026-11-26T21:02:02Z verify-minted — coord 11 round 1, task task_65c56ea019d5
+- 2026-11-26T21:04:17Z rework-minted — coord 11 round 1, task task_f31ee97ee180
+- 2026-11-26T21:11:26Z worker_done — coord 11, sha b3cc1a0, rework: narrowed suppression, valid full-config tests
+- 2026-11-26T21:11:26Z verify-minted — coord 11 round 2, task task_d805eed1a2e4
+- 2026-11-26T21:12:50Z verdict — coord 11 APPROVE
+- 2026-11-26T21:12:50Z note — task 11 approved; minor: rejected ForwardHeaders.Mode cascades a Names message (closeout review)
+- 2026-11-26T21:21:54Z worker_done — coord 12, sha 707e549, send path; webhook-id not shared with equal Headers template (deferred)
+- 2026-11-26T21:21:54Z verify-minted — coord 12 round 1, task task_47c9048498f3
+- 2026-11-26T21:21:54Z note — task 12: webhook-id string not shared with an equal Headers template (one extra string/send only when StandardWebhooks + equal Headers template); accepted, not in guard cells
+- 2026-11-26T21:23:39Z verdict — coord 12 APPROVE
+- 2026-11-26T21:24:46Z note — task 13 file set extended with HttpDestinationFactory.cs (hook resolution in Create); no concurrent writer
+- 2026-11-26T21:28:43Z worker_done — coord 13, sha 500638b, hooks + factory resolution
+- 2026-11-26T21:28:44Z verify-minted — coord 13 round 1, task task_8854577a6574
+- 2026-11-26T21:29:55Z verdict — coord 13 APPROVE
+- 2026-11-26T21:29:55Z note — task 13 approved; pending fix: mapper content read for signing (HttpDestination.cs:195) outside hook guard can throw raw (Req8 AC2) -> one-off fix-up 3
+- 2026-11-26T21:31:50Z worker_done — coord 14, sha 679bc15, image + packaging, docker build ok
+- 2026-11-26T21:31:50Z verify-minted — coord 14 round 1, task task_9816dcb3ae92
+- 2026-11-26T21:32:59Z verdict — coord 14 APPROVE
+- 2026-11-26T21:34:29Z note — fix-up 3 1c9f8e6: mapper content read fault wrapped (Req8 AC2)
+- 2026-11-26T21:45:56Z worker_done — coord 16, sha 30eebc3, harness cells; real-socket shows ~332 B/msg SendAsync boxes (O9 miss)
+- 2026-11-26T21:45:56Z verify-minted — coord 16 round 1, task task_a9457a9b2434
+- 2026-11-26T21:46:15Z note — task 16 30eebc3: O9 miss on real socket w500 (~332 B/msg SendAsync box); asked foreman msg_b48e0c5861da (O1 measure runtime pool-size knob recommended)
+- 2026-11-26T21:46:56Z note — foreman ruling msg_b48e0c5861da: O1 bounded spike (cache-size knob 64/256/512 + optional flatten SendAsync); knob works -> image runtimeconfig + docs; else O2 record gap and report residual; O3 rejected; ceilings from shipped config
+- 2026-11-26T21:49:42Z verdict — coord 16 APPROVE
+- 2026-11-26T21:49:49Z note — task 16 approved; Kafka term None dlq 919.0 vs 895.4 (11-24): within ceiling 1010.7, equals ceiling's measured 918.8 at 835b04a; task 18 rechecks existing cells
+- 2026-11-26T21:56:35Z note — O9 spike a14aaa3: GAP. Pool-size knob absent in .NET 10, SendAsync already single state machine. Residual relay-owned ~350 B/msg (real socket None w500), Strict w1 0 B. Task 19 records gap in BENCHMARKS/ADR 0015/README
+- 2026-11-26T22:08:46Z worker_done — coord 15, sha 16b9593, integration vs Kestrel incl TLS/h2/h2c/dlq
+- 2026-11-26T22:08:46Z verify-minted — coord 15 round 1, task task_0fa46b1943f6
+- 2026-11-26T22:09:42Z note — task 17 file set extended: HttpFloorScenario.cs, HttpMock.cs
+- 2026-11-26T22:13:10Z rework-minted — coord 15 round 1, task task_f462ee89f8c1
+- 2026-11-26T22:15:06Z worker_done — coord 17, sha 2446fff, h2c loopback 0 B, http2 cell 4,050 B/msg, relay-owned ~430 B (O9 mechanism)
+- 2026-11-26T22:15:06Z verify-minted — coord 17 round 1, task task_0618b9e101d1
+- 2026-11-26T22:15:16Z note — task 17 2446fff: http2 cell relay-owned ~430 B/msg = same O9 async-box gap (covered by foreman O2 ruling); ceiling from measurement in task 18
+- 2026-11-26T22:15:37Z worker_done — coord 15, sha c9fe4f1, rework: C6 bounded connect assertion
+- 2026-11-26T22:15:37Z verify-minted — coord 15 round 2, task task_15a5828ea764
+- 2026-11-26T22:16:21Z verdict — coord 17 APPROVE
+- 2026-11-26T22:16:21Z note — task 17 approved; for task 18: http2 cell run-to-run spread ~10-20 B
+- 2026-11-26T22:18:43Z verdict — coord 15 APPROVE
+- 2026-11-26T22:18:43Z note — task 15 approved; LogSecrecyTests transient fail once (~60 s fixture startup after Http run), 3 reruns green -> closeout review
+- 2026-11-26T22:19:04Z note — task 18 dispatched alone (ctx_bfb16302da28); task 19 waits until 18 done (quiet machine)
+- 2026-11-27T00:12:03Z worker_done — coord 18, sha 2f0ec7f, 9 Http ceilings from 5 runs, existing 24 unchanged
+- 2026-11-27T00:12:03Z verify-minted — coord 18 round 1, task task_d91d74ba9430
+- 2026-11-27T00:31:27Z verdict — coord 18 APPROVE
+- 2026-11-27T00:36:55Z worker_done — coord 19, sha ea76550, docs + ADR 0015
+- 2026-11-27T00:36:55Z verify-minted — coord 19 round 1, task task_d1fadc49acfc
+- 2026-11-27T00:38:36Z verdict — coord 19 APPROVE
+- 2026-11-27T00:38:42Z note — all 19 coords approved; closeout started
+- 2026-11-27T00:42:17Z note — closeout: Http csproj added to .github/release-units.yml relay unit (was missing; within G1/G7)
+- 2026-11-27T00:43:25Z closeout — b7caa31 docs/architecture + release-units; pre-existing stale refs outside branch: docs/runbook.md:194 Database destination, ADR 0005 old Kafka path
+- 2026-11-27T00:49:37Z note — closeout review: 7 findings; rework dispatched for R1 (SendAsync UriFormatException, DLQ Set throw, Reason CR/LF), R2 doc TokenUrl TLS, R3 expires_in clamp, R4 ring compaction, R5 prefixed reserved names, R6 roots dispose; accepted: token-cache re-Validate lifetime, no negative token cache
+- 2026-11-27T00:57:53Z note — review rework 17a229f (R1-R6) done, disposed; next: focused re-review of 17a229f, then sweep --worktrees, push, gh pr create, PR verdict ask to foreman
+- 2026-11-27T00:58:40Z note — re-review of 17a229f: no findings; sweep --worktrees run
+- 2026-11-27T00:59:31Z gate — ask gate_20424dd99624 on task_7319872bfe49 (status completed): PR https://github.com/Pernix-Labs/pernix-outbox-relay/pull/9 verdict

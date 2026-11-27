@@ -12,7 +12,7 @@ The leader of a `None` outbox runs one delivery loop on its session:
 
 **Read cost with failed rows.** Failed rows that are not due yet stay at the head of the `id` order, and every read walks past them. Measured on PostgreSQL 17 (500-row reads, 10k held ids, median of three quiet-host runs): 14.88 ms p95 per read with 100k such rows and 59.53 ms p95 with 500k (assumed, Q1), about 0.1 ms per 1k rows. Extrapolated linearly, not measured: 100 ms p95 near 700k–1M such rows. Watch `outbox.retrying`.
 
-A row leaves the table only after Kafka confirms it, after its dead letter is confirmed, or when it fails permanently with no `DeadLetter.Destination` set. Delivery is at least once. Duplicates happen when the relay stops or loses its lock between Kafka's confirm and the commit, and when a send times out after 30 s (`Local_MsgTimedOut`) but lands. Consumers deduplicate. `None` guarantees no order between rows. No log line is written per delivered message.
+A row leaves the table only after its destination confirms it (Kafka acknowledges the record, or an Http endpoint answers a `Delivered` status), after its dead letter is confirmed, or when it fails permanently with no `DeadLetter.Destination` set. Delivery is at least once. Duplicates happen when the relay stops or loses its lock between the destination's confirm and the commit, and when a send times out but lands (Kafka after 30 s, `Local_MsgTimedOut`, or Http after `SendTimeout`). Consumers deduplicate. `None` guarantees no order between rows. No log line is written per delivered message.
 
 Each Kafka record carries the row's `message_key` bytes as key (null when `message_key` is NULL), `payload` bytes unchanged as value, and one header per `headers` JSON entry with its value encoded UTF-8. The relay adds no headers to a delivered record. A producer `traceparent` header passes through unchanged. Dead letters add headers, see [Dead letters](#dead-letters).
 
@@ -55,11 +55,11 @@ Row states, from `retry_count`:
 
 ### Dead letters
 
-A dead letter goes to the `Kafka` destination named by `DeadLetter.Destination`, through its own producer per outbox, with the forced settings of the outbox's `Ordering.Mode` (see [Kafka](configuration.md#kafka)). It keeps the original key, payload and headers. Original headers named like a relay header are replaced. A row with malformed `headers` gets a dead letter with key, payload and the relay headers only. The relay adds, values UTF-8:
+A dead letter goes to the destination named by `DeadLetter.Destination`: a `Kafka` destination, through its own producer per outbox with the forced settings of the outbox's `Ordering.Mode` (see [Kafka](configuration.md#kafka)), or an `Http` destination with a single `Url`, as a request with the payload as body (see [Http delivery behavior](configuration.md#delivery-behavior)). It keeps the original key, payload and headers. Original headers named like a relay header are replaced. A row with malformed `headers` gets a dead letter with key, payload and the relay headers only. The relay adds, values UTF-8:
 
 | Header | Value |
 |---|---|
-| `x-dead-letter-reason` | Error text of the failure that made the row final: the transport error (Kafka error code and client reason) or a relay check such as `headers is not a JSON object of string values`. A dead-letter pending row stores this text in `last_error` and its later dead letter reuses it, or `dead letter pending` when `last_error` is NULL. |
+| `x-dead-letter-reason` | Error text of the failure that made the row final: the transport error (Kafka error code and client reason, or Http fault text such as `HTTP 400`) or a relay check such as `headers is not a JSON object of string values`. A dead-letter pending row stores this text in `last_error` and its later dead letter reuses it, or `dead letter pending` when `last_error` is NULL. |
 | `x-retry-attempts` | Delivery attempts to the original destination: `min(r + 1, Retry.MaxRetryAttempts + 1)`. A row that failed permanently before its retries ran out reports `Retry.MaxRetryAttempts + 1` when its dead letter is sent from a later read. |
 | `x-original-destination` | Original destination `Name`. |
 | `x-original-outbox` | Outbox `Name`. |
@@ -67,7 +67,7 @@ A dead letter goes to the `Kafka` destination named by `DeadLetter.Destination`,
 | `x-failed-at` | Time of the dead-letter attempt, ISO 8601 UTC, `yyyy-MM-ddTHH:mm:ss.fffZ`. |
 | `x-original-route` | Row `route`, absent when the route is NULL. A producer header with this name is always dropped. |
 
-Dead letters get the same pre-send size check as other sends, against the dead-letter topic and with the added headers counted. A compacted dead-letter topic is refused at startup, because dead letters keep the original key and compaction would discard all but the newest dead letter per key. A lost lock or stop after the dead letter landed but before the commit sends it again, so consumers of the dead-letter topic deduplicate on `x-original-outbox` and `x-original-id`. On stop the relay starts no new dead letters: a row that needs one stays untouched and the next leader sends the original once more, then dead-letters it.
+Kafka dead letters get the same pre-send size check as other sends, against the dead-letter topic and with the added headers counted. A compacted dead-letter topic is refused at startup, because dead letters keep the original key and compaction would discard all but the newest dead letter per key. A lost lock or stop after the dead letter landed but before the commit sends it again, so consumers of the dead-letter topic deduplicate on `x-original-outbox` and `x-original-id`. On stop the relay starts no new dead letters: a row that needs one stays untouched and the next leader sends the original once more, then dead-letters it.
 
 `last_error`, dead-letter headers, logs and metrics carry error text from the destination only. They never contain keys, payloads, header values, connection strings or `Producer` values.
 
@@ -129,7 +129,7 @@ A long or forgotten write transaction anywhere on the PostgreSQL cluster holds t
 ### Scopes and sending
 
 - **Scopes.** `Strict` has one scope per outbox. `PerKey` has one scope per non-null key, compared byte by byte.
-- **One unconfirmed send per scope.** The next row of a scope is sent only after Kafka confirmed the previous one, or after `Continue` removed it. A dead-letter send counts as the scope's one send.
+- **One unconfirmed send per scope.** The next row of a scope is sent only after the destination confirmed the previous one, or after `Continue` removed it. A dead-letter send counts as the scope's one send.
 - **NULL keys.** On `PerKey`, a row with a NULL `message_key` has no scope. It is sent on read without waiting for other rows, is unordered, and its failure holds nothing back. On `Strict`, NULL-key rows are ordered like every other row.
 - **Held rows.** `PerKey` holds at most 10 × `Polling.BatchSize` rows and at most `Polling.BatchSize` per key. `Strict` holds at most `Polling.BatchSize`. A leader reads only when at least `Polling.BatchSize` rows fit. Rows of a full scope stay in the table and the cursor moves back to them once the scope has drained to half.
 - **Hot key backlog.** While one `PerKey` key drains a backlog larger than its per-key queue, each move-back returns the cursor to that key's rows, so rows of other keys behind it wait while it drains. Measured with Kafka (`Polling.BatchSize` 500, 50 msg/s (assumed, Q1) over 100 other keys): the hot key drains at about 137–145 msg/s. With a 1k-row backlog (assumed, Q1) the other keys' p95 delay is 0.96 s, the same as with no hot key, the max is 1.37 s, and no row waited more than 5 s. With a 10k-row backlog the drain takes about 69 s, the other keys' p95 delay is 53.6 s (max 59.6 s), and 2,739 rows waited more than 5 s.
@@ -166,7 +166,7 @@ Delivery is at least once, as with `None`. When the leader loses its lock or sto
 
 ## Routing
 
-Each row carries the producer-written `route`. NULL means the row has no route. A destination has one address or a `Routes` map of route to address. A Kafka destination has `Topic` (one address) or `Routes` (route to topic), see [Outbox configuration](configuration.md#outbox-configuration). Core decides per row, with no default and no catch-all:
+Each row carries the producer-written `route`. NULL means the row has no route. A destination has one address or a `Routes` map of route to address. A Kafka destination has `Topic` (one address) or `Routes` (route to topic), see [Outbox configuration](configuration.md#outbox-configuration). An Http destination has `Url` (one address) or `Routes` (route to URL), see [Http settings](configuration.md#http-settings). Core decides per row, with no default and no catch-all:
 
 | Row `route` | One address | `Routes` map |
 |---|---|---|
@@ -174,7 +174,7 @@ Each row carries the producer-written `route`. NULL means the row has no route. 
 | A key of `Routes` | Held | Sent |
 | Any other value | Held | Held |
 
-The check applies to main sends only. A dead-letter pending row goes to the dead-letter destination unchecked, and its dead letter carries the original route as data. A Kafka dead letter writes it as header `x-original-route` (see [Dead letters](#dead-letters)). A dead-letter destination always has one address, see [Startup validation](configuration.md#startup-validation).
+The check applies to main sends only. A dead-letter pending row goes to the dead-letter destination unchecked, and its dead letter carries the original route as data. Kafka and Http dead letters write it as header `x-original-route` (see [Dead letters](#dead-letters)). A dead-letter destination always has one address, see [Startup validation](configuration.md#startup-validation).
 
 **Hold.** For a row it does not accept, the relay sends nothing. It writes, guarded on the `retry_count` it read (`r`), `retry_count = max(r, 1)`, `next_attempt_at = now() + Retry.MaxDelay` and `last_error = 'route not mapped: <route>'` (`route not mapped: (none)` for a NULL route), and logs `MessageHeld` (event 125) once per hold. A route longer than 63 UTF-16 code units, possible only without the V001 CHECK, is cut to its first 63 code units, or 62 when the 63rd is a high surrogate so no surrogate pair is split, plus `...(truncated)` in `last_error` and the log. A hold acts like a failure of that row: `PerKey` holds the row's key, `None` skips only that row, `Strict` holds the outbox at that row. It does not pause the outbox and records no `outbox.delivered`, `outbox.message_faults` or `outbox.destination_faults`.
 

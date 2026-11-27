@@ -3,7 +3,7 @@
 ## Product Purpose
 Services that change their database and then publish an event lose that event when the publish fails after the commit. The consumers then work from stale data until the next change. For example, a service that publishes configuration snapshots on a best-effort basis after commit leaves its consumers with a stale cache when a publish fails.
 
-The Outbox Relay fixes this with the transactional outbox pattern, delivered as a container image or as the `Pernix.OutboxRelay.Hosting` NuGet package for embedding in a host. A producer inserts a row into an outbox table in the same transaction as its business change, so the message exists if and only if the change committed. The relay polls the outbox tables and delivers each message to a Kafka topic, at least once, in the configured order. Producers integrate with plain SQL or the producer client packages, published as NuGet from this repo; the relay itself ships as an image and as the `Pernix.OutboxRelay.Hosting` NuGet package.
+The Outbox Relay fixes this with the transactional outbox pattern, delivered as a container image or as the `Pernix.OutboxRelay.Hosting` NuGet package for embedding in a host. A producer inserts a row into an outbox table in the same transaction as its business change, so the message exists if and only if the change committed. The relay polls the outbox tables and delivers each message to a Kafka topic or an HTTP endpoint, at least once, in the configured order. Producers integrate with plain SQL or the producer client packages, published as NuGet from this repo; the relay itself ships as an image and as the `Pernix.OutboxRelay.Hosting` NuGet package.
 
 ## Target Users
 - **Producing teams (domains).** Need durable event publishing without a framework or language lock-in. They write outbox rows in SQL or through the producer client packages.
@@ -12,7 +12,7 @@ The Outbox Relay fixes this with the transactional outbox pattern, delivered as 
 
 ## Key Features
 1. Transactional outbox over SQL: PostgreSQL in version 1. SQL Server is on hold until an adopter needs it.
-2. Kafka destinations, with transports added as modules.
+2. Kafka and Http destinations, with transports added as modules. Http sends one request per row with the raw payload as body, configured URL and header placeholders, a status-code contract, authentication, signing and mTLS.
 3. Three ordering modes per outbox: `None`, `PerKey` and `Strict`.
 4. Retries with backoff, dead-lettering, and an option to block a key or a whole outbox until an operator acts.
 5. Separate handling of message faults, which spend retries, and destination faults, which pause the outbox without spending retries.

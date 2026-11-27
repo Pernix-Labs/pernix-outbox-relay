@@ -30,7 +30,8 @@ All relay settings live under the `OutboxRelay` section, bound once at startup f
 
 - `OutboxRelay:ConnectionStrings`: name → connection string.
 - `OutboxRelay:KafkaClusters`: name → `BootstrapServers` plus `Producer` (librdkafka producer properties).
-- `OutboxRelay:Destinations[]`: where an outbox delivers. This build registers transport `Kafka` (cluster, and topic or routes).
+- `OutboxRelay:Destinations[]`: where an outbox delivers. This build registers transports `Kafka` (cluster, and topic or routes) and `Http` (URL or routes, see [Http](#http)).
+- `OutboxRelay:HttpCredentials`: name → secrets for `Http` destinations, see [`HttpCredentials`](#httpcredentials).
 - `OutboxRelay:Outboxes[]`: one entry per outbox table.
 
 The relay reads connection strings only from `OutboxRelay:ConnectionStrings`. A root `ConnectionStrings` entry is never used as a fallback.
@@ -95,7 +96,7 @@ Example, the design page § Configuration example reduced to one `Kafka` destina
 | `OutboxRelay.ConnectionStrings.<name>` | none | Must exist and be non-empty when a `Database.Connection` names it. A root `ConnectionStrings.<name>` does not satisfy it. |
 | `OutboxRelay.KafkaClusters.<name>` | none | Must exist when a `Kafka.Cluster` names it. `Producer` entries pass to librdkafka unchecked by the relay. A property librdkafka rejects fails startup, see [Startup validation](#startup-validation). |
 | `OutboxRelay.Destinations[].Name` | required | Unique. |
-| `OutboxRelay.Destinations[].Transport` | required | A registered transport: `Kafka`, which requires `Pernix.OutboxRelay.Destination.Kafka` registered (`AddKafkaDestination`). The image registers it. Any other value is refused. |
+| `OutboxRelay.Destinations[].Transport` | required | A registered transport: `Kafka`, which requires `Pernix.OutboxRelay.Destination.Kafka` registered (`AddKafkaDestination`), or `Http`, which requires `Pernix.OutboxRelay.Destination.Http` registered (`AddHttpDestination`). The image registers both. Any other value is refused. |
 | `OutboxRelay.Destinations[].Kafka.Cluster` | required for `Kafka` | Names an `OutboxRelay.KafkaClusters` entry. A `Kafka` destination accepts only `Name`, `Transport` and `Kafka`. Any other block is an unknown setting. |
 | `OutboxRelay.Destinations[].Kafka.Topic`, `.Kafka.Routes` | exactly one for `Kafka` | `Topic` is one topic and takes rows with no route. `Routes` maps route → topic and takes rows whose route is a key, see [Routing](delivery.md#routing). Both set or neither set is refused. An empty `Routes` object counts as not set. Every `Routes` value must be non-blank. Two routes may map to the same topic. A main send writes no route header, so consumers of a shared topic cannot tell its routes apart, and on a compacted shared topic same-key rows of different routes replace each other. Route keys are checked as described in [Startup validation](#startup-validation). |
 | `OutboxRelay.Outboxes[].Name` | required | Unique. |
@@ -173,11 +174,11 @@ Destination checks, per `OutboxRelay.Destinations[]` entry, in parallel, reporte
 - A destination named in any `OutboxRelay.Outboxes[].DeadLetter.Destination` must not be compacted: `OutboxRelay.Destinations[<name>]: topic '<topic>' is compacted and cannot hold dead letters of outbox '<outbox>'`.
 - One producer is built and disposed from the merged configuration, so a property librdkafka rejects fails here: `OutboxRelay.Destinations[<name>]: invalid producer configuration for cluster '<cluster>'`. The property value is not quoted. No message is sent.
 
-Destination bounds and routes, per outbox, for its destination and its `DeadLetter.Destination`. The relay creates each destination as a leader does for that outbox's `Ordering.Mode`, reads the send bound and the routes it declares, and disposes it. Nothing is sent and no connection is opened. A `null` send bound means unbounded and is accepted. Kafka declares a send bound of 30 s on `None` and none on `PerKey` and `Strict`. This stage refuses only a transport that declares an unusable value:
+Destination bounds and routes, per outbox, for its destination and its `DeadLetter.Destination`. The relay creates each destination as a leader does for that outbox's `Ordering.Mode`, reads the send bound and the routes it declares, and disposes it. Nothing is sent and no connection is opened. A `null` send bound means unbounded and is accepted. Kafka declares a send bound of 30 s on `None` and none on `PerKey` and `Strict`. Http declares its `SendTimeout` in every mode. This stage refuses only a transport that declares an unusable value:
 
 - `OutboxRelay.Outboxes[<outbox>]: destination '<destination>' declares SendBound <bound>; must be greater than zero`
 
-Routes (`null` = one address, see [Routing](delivery.md#routing)). A `Kafka` destination declares the keys of its `Routes`, or `null` when it has `Topic`. This stage refuses:
+Routes (`null` = one address, see [Routing](delivery.md#routing)). A `Kafka` destination declares the keys of its `Routes`, or `null` when it has `Topic`. An `Http` destination declares the keys of its `Routes`, or `null` when it has `Url`. This stage refuses:
 
 - `OutboxRelay.Outboxes[<outbox>].DeadLetter.Destination: destination '<destination>' declares Routes. A dead-letter destination has one address.`
 - `OutboxRelay.Outboxes[<outbox>]: destination '<destination>' declares an empty Routes set; Routes is null (one address) or names at least one route`
@@ -228,6 +229,254 @@ Both checks use the configuration of the record's own topic: the `Topic`, or on 
 
 Kafka client errors and librdkafka log lines go to the relay log (`KafkaClientLog`, event 201, `KafkaClientError`, event 202). The relay never logs producer configuration, keys, payloads or header values. librdkafka debug lines are logged at `Debug`, and the default `Logging:LogLevel:Default` is `Information`, so a domain that sets the `debug` producer property sees that output only after it also sets `Logging:LogLevel:Pernix.OutboxRelay.Destination.Kafka` to `Debug`. The relay does not redact that output. That choice is the domain's.
 
+## Http
+
+An `Http` destination sends one request per row. The body is the row's `payload` bytes, unchanged: no envelope, no re-encoding. The relay owns one `SocketsHttpHandler` per outbox and destination, built on the first send of a leadership term and disposed with the term, like the Kafka producer. Redirects are not followed, cookies are not kept and responses are not decompressed. The response body is drained up to 64 KB for connection reuse and is never read, logged or stored.
+
+### Http settings
+
+Every key sits under `OutboxRelay.Destinations[].Http`. An `Http` destination accepts only `Name`, `Transport` and `Http`. Unknown keys are refused. Enum values (`Method`, `Mode`, `Scheme`, `Encoding`, `ClientCredentialsIn`) are case-insensitive.
+
+| Setting | Default | Rule |
+|---|---|---|
+| `Url` | none | Exactly one of `Url` and `Routes`. Absolute `http` or `https` URL. Scheme, host and port are literal. Placeholders only in path and query. No user info, no fragment. Literal path and query must be canonical: percent-encode reserved and non-ASCII characters, no dot segments. |
+| `Routes.<route>` | none | Route → `{ "Url", "Method", "ContentType", "Headers" }`. Non-empty. Route keys match `^[a-z0-9][a-z0-9._-]{0,62}$`. `Url` is required, the other three override the destination value. Route `Headers` merge with destination `Headers`, the route entry wins on the same name. See [Routing](delivery.md#routing). |
+| `Method` | `POST` | `POST`, `PUT` or `PATCH`. |
+| `ContentType` | `application/octet-stream` | A media type. A forwarded row `content-type` header wins over it. |
+| `Headers.<name>` | none | Request headers. Name is an RFC 9110 token. Value takes the [placeholders](#placeholders) without URL escaping. A value without placeholders is built once at startup. Refused: `Content-Type` (use `ContentType`), `Authorization` (use `Authentication`), the hop-by-hop and framing headers listed under [Header forwarding](#header-forwarding), and names the relay sets itself (the `Authentication` header, `Signing` headers, dead-letter headers). |
+| `ForwardHeaders.Mode` | `All` | `All`, `None` or `Listed`. Which row headers become request headers. |
+| `ForwardHeaders.Names` | none | Required when `Mode` is `Listed`, refused otherwise. RFC 9110 tokens. |
+| `ForwardHeaders.Exclude` | none | Row headers never forwarded. RFC 9110 tokens. |
+| `ForwardHeaders.NamePrefix` | none | Prepended to each forwarded header name, for example `x-outbox-`. RFC 9110 token characters. |
+| `StatusCodes.Delivered` | `["2xx"]` | Codes that mean delivered. Entries are a code (`"409"`), a class (`"2xx"`) or a range (`"500-504"`), within 100-599. |
+| `StatusCodes.Rejected` | `["400", "413", "414", "415", "422"]` | Permanent message fault: dead letter, drop or block per the outbox's policy. |
+| `StatusCodes.Retried` | `[]` | Transient message fault: spends one retry. |
+| `StatusCodes.Paused` | every other code | Destination fault: the outbox pauses with backoff, no retry spent. |
+| `SendTimeout` | `00:00:30` | Greater than `00:00:00`. Covers the whole send: slot wait, token fetch, request, response headers. It is the destination's send bound in every ordering mode. |
+| `ConnectTimeout` | `00:00:10` | Greater than `00:00:00` and at most `SendTimeout`. |
+| `MaxRequestsInFlight` | `64` | At least `1`. Requests in flight per outbox and destination. A send waits for a free slot within `SendTimeout`, then fails with `timeout waiting for a request slot`. |
+| `HttpVersion` | `"1.1"` | `"1.1"`, `"2"` or `"2-cleartext"`. See [`HttpVersion`](#httpversion). |
+| `Authentication.Scheme` | `None` | `None`, `Basic`, `Bearer`, `ApiKey` or `OAuth2ClientCredentials`. Combines with `Tls.ClientCertificate`. |
+| `Authentication.Credential` | none | Required for every scheme but `None`. Names an [`HttpCredentials`](#httpcredentials) entry that has the scheme's fields. |
+| `Authentication.HeaderName` | none | `ApiKey` only, required. RFC 9110 token, not a reserved or content header. |
+| `Authentication.ValuePrefix` | none | `ApiKey` only. Prepended to the key. |
+| `Authentication.TokenUrl` | none | `OAuth2ClientCredentials` only, required. Absolute `https` URL, `http` only for a loopback host. Always sent over HTTP/1.1. |
+| `Authentication.Scope`, `.Audience` | none | `OAuth2ClientCredentials` only. Sent as `scope` and `audience` form fields. |
+| `Authentication.ClientCredentialsIn` | `Header` | `OAuth2ClientCredentials` only. `Header` (`Authorization: Basic`) or `Body` (`client_id`, `client_secret` form fields). |
+| `Signing.Scheme` | none | Required when `Signing` is set. `StandardWebhooks` or `HmacSha256`. |
+| `Signing.Credential` | none | Required. Names an `HttpCredentials` entry with `SigningSecret`. |
+| `Signing.HeaderName` | none | `HmacSha256` only, required. RFC 9110 token, not a reserved or content header, not the `Authentication` header. |
+| `Signing.Encoding` | `Hex` | `HmacSha256` only. `Hex` or `Base64`. |
+| `Signing.ValuePrefix` | none | `HmacSha256` only. Prepended to the signature, for example `sha256=`. |
+| `Signing.WebhookId` | `{outbox}-{id}` | `StandardWebhooks`. The `webhook-id` value. Takes the placeholders. |
+| `Tls.CaCertificatePath` | none | PEM bundle of private CAs. The server chain must end in one of them. No setting disables certificate validation. Also applies to `Authentication.TokenUrl`, so the bundle must cover the token endpoint's CA too. |
+| `Tls.ClientCertificate.CertificatePath`, `.KeyPath` | none | PEM client certificate and key, both required together. The client certificate is also offered to `Authentication.TokenUrl`. |
+| `Tls.ClientCertificate.PfxPath` | none | PFX client certificate, instead of the PEM pair. |
+| `Tls.ClientCertificate.Credential` | none | `PfxPath` only. Names an `HttpCredentials` entry with `CertificatePassword`. |
+| `HealthProbe.Url` | none | Required when `HealthProbe` is set. Literal URL, no placeholders. Sent once at startup. |
+| `HealthProbe.Method` | `HEAD` | `HEAD` or `GET`. |
+| `HealthProbe.Expected` | `["2xx"]` | Status entries that pass, same format as `StatusCodes`. |
+| `RequestMapper` | none | Name of an `IHttpRequestMapper` the host registered. Embedded hosts only, see [Hooks](embedding.md#http-hooks). The image registers none. |
+| `ResponseClassifier` | none | Name of an `IHttpResponseClassifier` the host registered. Replaces `StatusCodes`. Embedded hosts only. |
+
+A listed `StatusCodes` class replaces that class's default set. For example `"Rejected": ["400"]` makes `413`, `414`, `415` and `422` paused. A code in two classes is refused.
+
+Array settings take an index in environment variables and on the command line:
+
+```sh
+OutboxRelay__Destinations__1__Http__StatusCodes__Retried__0=500
+OutboxRelay__Destinations__1__Http__ForwardHeaders__Names__0=traceparent
+```
+
+### Placeholders
+
+`Url`, `Routes.<route>.Url`, `Headers` values and `Signing.WebhookId` take a fixed set of placeholders. There are no expressions, defaults or unescaped variants.
+
+| Placeholder | Value | Bad row data |
+|---|---|---|
+| `{outbox}`, `{destination}` | Configured names. Folded in at startup. | |
+| `{route}` | The row's route. `Routes` destinations only. | |
+| `{id}` | Row id digits. | |
+| `{key}` | Key as UTF-8. | Null or invalid UTF-8 key: permanent message fault. |
+| `{key:hex}`, `{key:base64url}` | Key bytes encoded. | Null key: permanent message fault. |
+| `{header:<name>}` | Row header value. | Missing header: permanent message fault. |
+
+In a URL every rendered value is percent-encoded (RFC 3986 unreserved characters kept). A rendered value that forms a whole path segment of exactly `.` or `..` is a permanent message fault. In a header value no escaping applies, and a CR, LF or NUL is a permanent message fault. Fault text names the placeholder or header, never the value.
+
+### `HttpVersion`
+
+| Value | Protocol | URL scheme |
+|---|---|---|
+| `"1.1"` | HTTP/1.1 keep-alive. | `http` or `https` |
+| `"2"` | HTTP/2 negotiated by ALPN. A server without h2 fails the request as a destination fault. No downgrade. | `https` only |
+| `"2-cleartext"` | HTTP/2 with prior knowledge (h2c), no upgrade. For sidecars and meshes. | `http` only |
+
+The rule applies to every URL of the destination: `Url`, each `Routes` entry and `HealthProbe.Url`. `"2"` with an `http` URL fails startup with `Http.HttpVersion: "2" requires https URLs; use "2-cleartext" for prior-knowledge h2c`, so a scheme typo never turns into cleartext HTTP/2. `TokenUrl` always uses HTTP/1.1. Under HTTP/2 the relay opens another connection when `MaxRequestsInFlight` exceeds the server's stream limit.
+
+### Header forwarding
+
+Request headers come from three sources. On an equal name (case-insensitive) the later source wins:
+
+1. Forwarded row headers, per `ForwardHeaders`.
+2. `Headers`.
+3. Relay-owned headers: `Authentication`, `Signing`, `Content-Type`, `Content-Length`, dead-letter headers.
+
+Never forwarded: `Connection`, `Keep-Alive`, `Proxy-Connection`, `Transfer-Encoding`, `TE`, `Trailer`, `Upgrade`, `Host`, `Content-Length`, `Expect`, `Authorization`, `Proxy-Authorization`, `Cookie`. A forwarded `content-type` sets the request `Content-Type`. Forwarded `Allow`, `Content-Disposition`, `Content-Encoding`, `Content-Language`, `Content-Location`, `Content-MD5`, `Content-Range`, `Expires` and `Last-Modified` go on the content headers. A row header whose name is not an RFC 9110 token, whose value has CR, LF or NUL, or that differs from another row header only by case is a permanent message fault. It is never dropped silently. Request header values are sent as UTF-8. A row `traceparent` reaches the endpoint unchanged: the relay adds no trace headers of its own.
+
+`All` is the default, so every row header reaches the endpoint. For an endpoint outside your trust boundary, set `Mode` `Listed` with the headers its contract needs, or list internal headers in `Exclude`.
+
+### `HttpCredentials`
+
+`OutboxRelay:HttpCredentials:<name>` holds secrets apart from destinations, so they survive reordering of `Destinations[]`. Unknown fields are refused. Startup failures name the path, never a value.
+
+| Field | Used by |
+|---|---|
+| `Username`, `Password` | `Authentication.Scheme` `Basic` |
+| `Token` | `Bearer` |
+| `ApiKey` | `ApiKey` |
+| `ClientId`, `ClientSecret` | `OAuth2ClientCredentials` |
+| `SigningSecret` | `Signing`. `StandardWebhooks`: `whsec_` + base64. `HmacSha256`: raw UTF-8. |
+| `CertificatePassword` | `Tls.ClientCertificate.Credential` (PFX) |
+
+Set secrets as environment variables or from a secret store, never in a committed file:
+
+```sh
+OutboxRelay__HttpCredentials__<name>__<field>=<secret>
+OutboxRelay__HttpCredentials__Ledger__ApiKey=<from secret>
+OutboxRelay__HttpCredentials__Billing__ClientSecret=<from secret>
+```
+
+OAuth2 tokens are fetched with `grant_type=client_credentials`, cached until `expires_in` minus 60 s, refreshed by one caller at a time, and shared by every outbox that uses the destination. A token response without `expires_in` is cached until the endpoint answers `401`. A `401` drops the cached token and pauses the outbox. The next send fetches a new one.
+
+### Examples
+
+Minimal. One URL, `POST`, raw payload, every row header forwarded:
+
+```json
+{ "Name": "OrdersHook", "Transport": "Http",
+  "Http": { "Url": "https://orders-sink.internal.example/events" } }
+```
+
+Routed, OAuth2 and CloudEvents binary mode. The producer writes `ce-type` and `content-type` row headers. `Headers` adds the constant attributes and the event id:
+
+```json
+{
+  "OutboxRelay": {
+    "HttpCredentials": {
+      "Billing": { "ClientId": "outbox-relay", "ClientSecret": "<from secret>" }
+    },
+    "Destinations": [
+      {
+        "Name": "BillingEvents",
+        "Transport": "Http",
+        "Http": {
+          "Routes": {
+            "invoices": { "Url": "https://billing.example.com/events/invoices" },
+            "payments": { "Url": "https://billing.example.com/events/payments" }
+          },
+          "Headers": {
+            "ce-id": "{outbox}-{id}",
+            "ce-source": "/orders",
+            "ce-specversion": "1.0"
+          },
+          "ForwardHeaders": { "Mode": "Listed", "Names": ["ce-type", "content-type", "traceparent"] },
+          "Authentication": {
+            "Scheme": "OAuth2ClientCredentials",
+            "Credential": "Billing",
+            "TokenUrl": "https://auth.example.com/oauth2/token",
+            "Scope": "events.write"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+Fully custom. Templated URL, `PUT`, own status contract, HTTP/2, API key, Standard Webhooks signing, private CA with mTLS, health probe and a host request mapper:
+
+```json
+{
+  "Name": "LedgerSink",
+  "Transport": "Http",
+  "Http": {
+    "Url": "https://ledger.internal.example/accounts/{key:base64url}/entries?source={outbox}",
+    "Method": "PUT",
+    "ContentType": "application/vnd.ledger.entry+json",
+    "Headers": { "Idempotency-Key": "{outbox}-{id}", "X-Tenant": "{header:tenant-id}" },
+    "ForwardHeaders": { "Mode": "Listed", "Names": ["traceparent", "tenant-id"], "NamePrefix": "x-outbox-" },
+    "StatusCodes": { "Delivered": ["2xx", "409"], "Rejected": ["400", "422"], "Retried": ["423"] },
+    "SendTimeout": "00:00:10",
+    "ConnectTimeout": "00:00:03",
+    "MaxRequestsInFlight": 16,
+    "HttpVersion": "2",
+    "Authentication": { "Scheme": "ApiKey", "HeaderName": "X-Api-Key", "Credential": "Ledger" },
+    "Signing": { "Scheme": "StandardWebhooks", "Credential": "LedgerSigning" },
+    "Tls": {
+      "CaCertificatePath": "/etc/relay/tls/internal-ca.pem",
+      "ClientCertificate": { "CertificatePath": "/etc/relay/tls/client.crt", "KeyPath": "/etc/relay/tls/client.key" }
+    },
+    "HealthProbe": { "Url": "https://ledger.internal.example/healthz", "Method": "GET" },
+    "RequestMapper": "ledger-envelope"
+  }
+}
+```
+
+`RequestMapper` fails startup in the image, which registers no hook. Drop it there.
+
+### CloudEvents binary mode
+
+There is no CloudEvents mode. Binary mode is plain header forwarding:
+
+1. The producer writes the payload as the event data and sets row headers `ce-type` and `content-type` (and any other `ce-*` attribute that varies per event).
+2. `Headers` sets the constant attributes, `"ce-source": "/orders"` and `"ce-specversion": "1.0"`, and `"ce-id": "{outbox}-{id}"`.
+3. Default forwarding (`All`) or a `Listed` set that names the `ce-*` and `content-type` headers carries the rest.
+
+The request is a conformant CloudEvents HTTP binary-mode request. Structured mode (a JSON envelope) is not built in. An embedded host can build it with a request mapper.
+
+### Delivery behavior
+
+- **Status classes.** `Delivered` deletes the row. `Rejected` is a permanent message fault. `Retried` spends one retry. `Paused` is a destination fault: the outbox pauses with backoff and spends no retry. Fault text is `HTTP 503`, or `route 'alerts': HTTP 503` on a `Routes` destination. It never holds the URL, key, header values or response text.
+- **Transport failures pause.** Connect, DNS, TLS, reset and `SendTimeout` failures are destination faults, for example `HttpRequestException: ConnectionError` or `timeout after 00:00:30`. A send never throws for a delivery failure.
+- **`Retry-After` is ignored.** The outbox pause backoff applies (`Retry.InitialDelay`, growing by `Retry.BackoffMultiplier` to `Retry.MaxDelay`).
+- **`500` pauses by default, and a poison row stalls the outbox.** A row the endpoint always answers with `500` pauses the outbox again on every attempt, and no later row is delivered. Alert on a steadily rising `outbox.destination_faults`. When the endpoint's contract says `500` means a bad message, move it to `Retried` (`"Retried": ["500"]`), so the row spends retries and then dead-letters, drops or blocks.
+- **One dead host pauses all routes.** A destination fault on any route pauses the whole outbox, so a `Routes` destination whose routes point at different hosts stalls every route when one host is down. Use one destination, and one outbox, per host when the hosts fail independently.
+- **Order across timeouts.** On `PerKey` and `Strict` a request that timed out may still reach the endpoint after its resend, so the endpoint can see A, B, then the late A. HTTP has no unbounded send that would prevent it. Send an idempotency key (for example `"Idempotency-Key": "{outbox}-{id}"`) and deduplicate on it. An endpoint that needs strict order must check its own sequence in the payload. The relay provides none.
+- **Dead letters.** An `Http` destination can be a dead-letter destination when it has a single `Url`. It sends the same body with `x-dead-letter-reason`, `x-retry-attempts`, `x-original-destination`, `x-original-outbox`, `x-original-id`, `x-failed-at` and `x-original-route`, the same names and values as Kafka dead letters, replacing producer headers with those names. `Http` and `Kafka` dead-letter into each other. See [Dead letters](delivery.md#dead-letters).
+- **Liveness.** A send counts as stuck `SendTimeout` + 10 s after it started, in every ordering mode.
+
+### Proxy
+
+The relay uses a proxy only when `HTTPS_PROXY`, `HTTP_PROXY` or `ALL_PROXY` is set and non-empty, in exact upper or lower case (`https_proxy`). `NO_PROXY` then applies as .NET reads it. With none of them set, no proxy is used and the system proxy settings are not consulted (that lookup cost about 539 B per request, measured on macOS).
+
+### Startup checks
+
+The configuration stage checks every rule above, with no I/O. The destination stage then runs, per `Http` destination:
+
+- With `OAuth2ClientCredentials`: one token fetch.
+- With `HealthProbe`: one probe request, which must answer a status in `Expected`.
+
+No request goes to `Url` or a `Routes` URL. Failures name the destination and host only: `OutboxRelay.Destinations[<name>]: ...`.
+
+### Logs and telemetry
+
+| Event | Name | Level | When |
+|---|---|---|---|
+| 300 | `HttpClientCreated` | Debug | Handler built: destination, host, max connections. |
+| 301 | `HttpTokenRefreshFailed` | Warning | OAuth2 token fetch failed: destination, token host, status code or exception type. |
+| 302 | `HttpProbeFailed` | Warning | Startup probe failed: destination, host, method, status code or exception type. |
+
+The relay never logs a URL path or query, header values, body, response body or credentials. Delivery outcomes use the Core metrics and events, see [Metrics](#metrics).
+
+Request duration comes from .NET's own `System.Net.Http` meter (`http.client.request.duration`), not a relay instrument. Add it in an embedded host:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(m => m.AddOutboxRelayInstrumentation().AddMeter("System.Net.Http"));
+```
+
+OpenTelemetry HttpClient tracing instrumentation records `url.full` on each span. A templated URL then puts keys and header values in your traces. Leave that instrumentation off, or redact `url.full`, when URLs carry row data.
+
 ## Migrating from root-level settings
 
 Breaking change for the image. Earlier images read relay settings from the root (`Outboxes`, `Destinations`, `KafkaClusters`, `ConnectionStrings`). This image reads them only from the `OutboxRelay` section. Move every relay setting in every configuration source: appsettings, SSM Parameter Store, Helm env values and the command line.
@@ -249,7 +498,7 @@ The image ignores root-level relay settings. An image whose outboxes are still a
 
 | Endpoint | Meaning |
 |---|---|
-| `GET :5612/livez` | 200 while the process is up and every outbox worker loop runs and makes progress. 503 if a worker loop stops, or a worker is past its progress due time (stuck on an await), while the host is not stopping. Database and broker outages, gate stalls and delivery pauses do not affect it. A Kafka `None` send counts as stuck 30 s + 10 s after it started. A Kafka `PerKey` or `Strict` send never does, because it has no timeout. |
+| `GET :5612/livez` | 200 while the process is up and every outbox worker loop runs and makes progress. 503 if a worker loop stops, or a worker is past its progress due time (stuck on an await), while the host is not stopping. Database and broker outages, gate stalls and delivery pauses do not affect it. A Kafka `None` send counts as stuck 30 s + 10 s after it started. A Kafka `PerKey` or `Strict` send never does, because it has no timeout. An Http send counts as stuck `SendTimeout` + 10 s after it started, in every mode. |
 | `GET :5612/readyz` | 200 while the host has started, is not stopping and every outbox database is reachable. 503 while any outbox database is unreachable. A lock held by another replica does not affect it. |
 
 ## Metrics

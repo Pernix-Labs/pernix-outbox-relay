@@ -32,9 +32,9 @@ internal static class TermScenario
         {
             foreach (var dest in options.Dests)
             {
-                if (dest is not ("null" or "kafka"))
+                if (dest is not ("null" or "kafka" or "http"))
                 {
-                    throw new InvalidOperationException($"idle: destination '{dest}' not supported, use null or kafka");
+                    throw new InvalidOperationException($"idle: destination '{dest}' not supported, use null, kafka or http");
                 }
 
                 await IdleCellAsync(mode, dest, options.Seconds, options.Rounds);
@@ -107,7 +107,7 @@ internal static class TermScenario
     private static (long N, long Warm) Defaults(OrderingMode mode, string dest) => dest switch
     {
         _ when mode == OrderingMode.Strict => (20_000, 5_000),
-        "dlq" => (50_000, 10_000),
+        "dlq" or "http-dlq" => (50_000, 10_000),
         _ => (200_000, 50_000),
     };
 
@@ -117,7 +117,7 @@ internal static class TermScenario
     private static async Task SteadyCellAsync(OrderingMode mode, string dest, int headers, long n, long warm, int rounds)
     {
         var name = $"term {mode} {dest} b{TermHost.BatchSize} h{headers}";
-        var unit = dest == "dlq" ? "dlq-msg" : "msg";
+        var unit = dest is "dlq" or "http-dlq" ? "dlq-msg" : "msg";
         var session = InMemorySession.Preallocated(RowBlock.Create(1, checked((int)(warm + rounds * n)), headers));
         var windows = new Windows(warm, n, rounds);
         session.OnRemoved = windows.OnRemoved;
@@ -255,15 +255,44 @@ internal static class TermScenario
 
         public static TermCell Create(OrderingMode mode, string dest, InMemorySession session, TimeSpan? interval = null)
         {
-            Func<IDestination> createDestination = dest switch
+            var loopback = HttpMock.Loopback(new HttpLoopback(200));
+            var staticUrl = HttpMock.Url(HttpLoopback.Host, "static");
+            DeadLetterTarget? deadLetter = null;
+            Func<IDestination> createDestination;
+            switch (dest)
             {
-                "null" => static () => new NullDestination(),
-                "kafka" => () => KafkaMock.Create(mode),
-                "dlq" => static () => new PermanentFaultDestination(),
-                _ => throw new InvalidOperationException($"term: unknown destination '{dest}'"),
-            };
+                case "null":
+                    createDestination = static () => new NullDestination();
+                    break;
+                case "kafka":
+                    createDestination = () => KafkaMock.Create(mode);
+                    break;
+                case "dlq":
+                    createDestination = static () => new PermanentFaultDestination();
+                    deadLetter = new DeadLetterTarget(KafkaMock.DeadLetterName, () => KafkaMock.CreateDeadLetter(mode));
+                    break;
+                case "http":
+                    createDestination = () => HttpMock.Create(mode, loopback, staticUrl);
+                    break;
+                case "http-tpl":
+                    createDestination = () => HttpMock.Create(mode, loopback, HttpMock.Url(HttpLoopback.Host, "tpl"));
+                    break;
+                case "http-sat":
+                    createDestination = () => HttpMock.Create(mode, loopback, staticUrl, HttpMock.SaturatedInFlight);
+                    break;
+                case "http2":
+                    var loopback2 = HttpMock.Loopback(new HttpLoopback(200, http2: true));
+                    createDestination = () => HttpMock.Create(mode, loopback2, staticUrl, httpVersion: "2-cleartext");
+                    break;
+                case "http-dlq":
+                    createDestination = static () => new PermanentFaultDestination();
+                    deadLetter = new DeadLetterTarget(HttpMock.DeadLetterName, () => HttpMock.CreateDeadLetter(mode, loopback, staticUrl));
+                    break;
+                default:
+                    throw new InvalidOperationException($"term: unknown destination '{dest}'");
+            }
 
-            var term = TermHost.Create(mode, createDestination, interval ?? TermHost.SteadyInterval, deadLetter: dest == "dlq");
+            var term = TermHost.Create(mode, createDestination, interval ?? TermHost.SteadyInterval, deadLetter: deadLetter);
             return new TermCell(term, session);
         }
 

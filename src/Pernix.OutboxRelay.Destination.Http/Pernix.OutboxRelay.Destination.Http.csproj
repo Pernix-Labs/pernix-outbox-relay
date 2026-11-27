@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\RelayPackage.props" />
+
+  <PropertyGroup>
+    <AssemblyName>Pernix.OutboxRelay.Destination.Http</AssemblyName>
+    <RootNamespace>Pernix.OutboxRelay.Destination.Http</RootNamespace>
+    <PackageId>Pernix.OutboxRelay.Destination.Http</PackageId>
+    <PackageTags>$(PackageTags);http;webhook</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pernix.OutboxRelay.Core\Pernix.OutboxRelay.Core.csproj" />
+  </ItemGroup>
+
+</Project>

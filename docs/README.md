@@ -1,6 +1,6 @@
 # docs/
 
-Outbox Relay: a generic transactional outbox service that delivers outbox rows to a Kafka topic, at least once and in order. This build holds the walking skeleton (host, config, health, telemetry, image), the outbox configuration model, startup validation, one leader per outbox on PostgreSQL, and delivery to Kafka in all three `Ordering.Mode` values (`None`, `PerKey`, `Strict`) with retries, dead letters to Kafka and, for `PerKey` and `Strict`, `OnPermanentFailure` `Block`. Product summary: [`docs/product.md`](product.md).
+Outbox Relay: a generic transactional outbox service that delivers outbox rows to a Kafka topic or an HTTP endpoint, at least once and in order. This build holds the walking skeleton (host, config, health, telemetry, image), the outbox configuration model, startup validation, one leader per outbox on PostgreSQL, and delivery to Kafka in all three `Ordering.Mode` values (`None`, `PerKey`, `Strict`), delivery to Http endpoints, retries, dead letters to Kafka or Http and, for `PerKey` and `Strict`, `OnPermanentFailure` `Block`. Product summary: [`docs/product.md`](product.md).
 
 Startup refuses features this build lacks, see [Refused in this build](configuration.md#refused-in-this-build).
 
@@ -12,7 +12,7 @@ Deploying and operating the relay (config examples, database prerequisites, aler
 
 | Page | For | Contents |
 |---|---|---|
-| [`configuration.md`](./configuration.md) | Deployers, operators | Configuration chain, environment variables, outbox configuration, refused settings, startup validation, PostgreSQL prerequisites, Kafka, health, metrics. |
+| [`configuration.md`](./configuration.md) | Deployers, operators | Configuration chain, environment variables, outbox configuration, refused settings, startup validation, PostgreSQL prerequisites, Kafka, Http, health, metrics. |
 | [`delivery.md`](./delivery.md) | Producers, consumers, operators | Ordering modes, write-order rule, failure policy, dead letters, graceful stop, routing, operator actions, broker-outage test. |
 | [`embedding.md`](./embedding.md) | Service owners | Run the relay in your own .NET host with `Pernix.OutboxRelay.Hosting`: install, registration, health mapping, telemetry helpers, configuration, host implications. |
 | [`client-packages.md`](./client-packages.md) | Producers | Producer client packages: install, outbox table, grants, publish paths, contracts, first publish. |

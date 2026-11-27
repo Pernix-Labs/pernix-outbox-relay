@@ -20,8 +20,12 @@ internal static class AllocationCeilings
     public const string ThreeSpread = "3 × spread of the ceiling runs exceeds 10%";
     public const string IdleNoise = "idle noise, --rounds 1";
 
-    // term kafka and dlq rows re-measured at 835b04a. Every other row is from 85e6bf6.
-    public static readonly MeasuredOn MeasuredOn = new("Apple M5, 10 cores, 24 GB RAM, macOS 27.2 (26B123), arm64", "85e6bf6, term kafka/dlq 835b04a", "2026-11-10, term kafka/dlq 2026-11-14", 5);
+    // term kafka and dlq rows re-measured at 835b04a. Http rows measured at c9fe4f1 on the M6. Every other row is from 85e6bf6.
+    public static readonly MeasuredOn MeasuredOn = new(
+        "Apple M5, 10 cores, 24 GB RAM, macOS 27.2 (26B123), arm64; Http rows Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1 (26B131), arm64",
+        "85e6bf6, term kafka/dlq 835b04a, Http c9fe4f1",
+        "2026-11-10, term kafka/dlq 2026-11-14, Http 2026-11-26",
+        5);
 
     public static readonly Ceiling[] All =
     [
@@ -51,5 +55,16 @@ internal static class AllocationCeilings
         new("idle PerKey kafka interval 1s", "s", 295.7, 95.7, 30.3, 200.0, IdleNoise, "core loop −4,813.5", "none"),
         new("idle Strict null interval 1s", "s", 284.5, 84.5, 39.8, 200.0, IdleNoise, "core loop −4,253.8", "none"),
         new("idle Strict kafka interval 1s", "s", 295.0, 95.0, 32.7, 200.0, IdleNoise, "core loop −3,712.6", "none"),
+
+        // Http rows: 5 guard runs on c9fe4f1. Exceeds: the spike's UseProxy default vs off delta (http-floor), for cells that send through SocketsHttpHandler over HTTP/1.1.
+        new("http-stub None w500 h1", "msg", 466.4, 424.0, 0.0, 42.4, TenPercentReason, "none", "none"),
+        new("term None http b500 h1", "msg", 1655.3, 1504.8, 0.0, 150.5, TenPercentReason, "macOS proxy lookup −539.4 (UseProxy env-only)", "none"),
+        new("term PerKey http b500 h1", "msg", 1655.4, 1504.9, 0.0, 150.5, TenPercentReason, "macOS proxy lookup −539.4 (UseProxy env-only)", "none"),
+        new("term Strict http b500 h1", "msg", 1655.4, 1504.9, 0.0, 150.5, TenPercentReason, "macOS proxy lookup −539.4 (UseProxy env-only)", "none"),
+        new("term None http-tpl b500 h1", "msg", 2076.8, 1888.0, 0.0, 188.8, TenPercentReason, "macOS proxy lookup −539.4 (UseProxy env-only)", "none"),
+        new("term None http-sat b500 h1", "msg", 1655.3, 1504.8, 0.0, 150.5, TenPercentReason, "macOS proxy lookup −539.4 (UseProxy env-only)", "none"),
+        new("term None http-dlq b500 h1", "dlq-msg", 2200.9, 2000.8, 0.0, 200.1, TenPercentReason, "macOS proxy lookup −539.4 (UseProxy env-only)", "none"),
+        new("term None http2 b500 h1", "msg", 4464.0, 4058.2, 11.1, 405.8, TenPercentReason, "none", "none"),
+        new("idle None http interval 1s", "s", 299.5, 99.5, 21.3, 200.0, IdleNoise, "none", "none"),
     ];
 }
