@@ -62,7 +62,7 @@ the rejection of raw `NpgsqlDataReader` reads under Alternatives.
 ## Amendment, 2026-11-10: process-wide dead-letter name bytes and the allocation guard
 
 - Header bytes are also shared across messages. Kafka dead letters take their outbox and destination name header values from
-  one process-wide cache, `NameBytes` in `KafkaDeadLetterHeaders` (`src/Pernix.OutboxRelay.Kafka/KafkaDeadLetterHeaders.cs`),
+  one process-wide cache, `NameBytes` in `KafkaDeadLetterHeaders` (`src/Pernix.OutboxRelay.Destination.Kafka/KafkaDeadLetterHeaders.cs`),
   keyed by configured name. Every dead letter of that name carries the same array, so header arrays are never pooled,
   recycled or written after a send or commit. The comment on `NameBytes` states the rule.
 - Allocation guard. `AllocationGuardTests` in `tests/Pernix.OutboxRelay.Unit.Tests` runs the benchmark harness and fails when
@@ -97,11 +97,11 @@ the rejection of raw `NpgsqlDataReader` reads under Alternatives.
   - Lock-step upgrade rule: bump `Nanov.Kafka` and stock `Confluent.Kafka` only to versions with the same
     `librdkafka.redist` dependency, then re-run QG1-QG4, the parity tests, `KafkaRawProducerTests` and the allocation
     measurement.
-  - Two Kafka client APIs in one assembly, `Pernix.OutboxRelay.Kafka`.
+  - Two Kafka client APIs in one assembly, `Pernix.OutboxRelay.Destination.Kafka`.
   - H2 interim: five internal fork members reached through `UnsafeAccessor`, two of `Nanov.Kafka.IRawProducer`
     (`ProduceRawCore`, `ThrowIfError`) and three of `Nanov.Kafka.Impl.Librdkafka` (`headers_new`, `headers_add`,
     `headers_destroy`), so native calls use the librdkafka variant the fork loaded. `AllowUnsafeBlocks` in
-    `Pernix.OutboxRelay.Kafka.csproj` stays for pinning. All in `src/Pernix.OutboxRelay.Kafka/KafkaEmptyHeaderValues.cs`.
+    `Pernix.OutboxRelay.Destination.Kafka.csproj` stays for pinning. All in `src/Pernix.OutboxRelay.Destination.Kafka/KafkaEmptyHeaderValues.cs`.
     Removal rule below.
   - Empty-span handling and its tests: `NanovZeroLengthTests`, the wire parity tests (`KafkaWireParityTests`,
     `KafkaHeaderParityTests`) and `Rare_path_reaches_same_slot_and_fault_mapping_as_common_path`.
