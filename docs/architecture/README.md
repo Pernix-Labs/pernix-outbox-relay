@@ -12,7 +12,7 @@ One markdown file per major system or topic. Pick names that read well in a dire
 
 Current docs:
 
-- [`outbox-relay-host.md`](./outbox-relay-host.md) — the `Pernix.OutboxRelay.Host` deployable: startup composition, configuration chain, outbox configuration and startup validation, PostgreSQL leadership, delivery in every `Ordering.Mode`, routing, Kafka transport, health, telemetry and image.
+- [`outbox-relay-host.md`](./outbox-relay-host.md) — the `Pernix.OutboxRelay.Host` deployable: startup composition, configuration chain, outbox configuration and startup validation, PostgreSQL leadership, delivery in every `Ordering.Mode`, routing, Kafka and Http transports, health, telemetry and image.
 
 Use [`_template.md`](./_template.md) as the starting point for a new architecture doc.
 

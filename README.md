@@ -140,13 +140,13 @@ Or run the image: `ghcr.io/pernix-labs/pernix-outbox-relay:<version>`.
 | `Pernix.OutboxRelay.Client` | Producer | Contracts: `OutboxMessage`, `OutboxHeaders`, `IOutboxPublisher`. |
 | `Pernix.OutboxRelay.Client.PostgreSql` | Producer | PostgreSQL publisher (`AddPostgreSqlOutboxPublisher`) and the outbox DDL scripts (`PostgreSqlOutboxSchema`). |
 | `Pernix.OutboxRelay.Client.EntityFrameworkCore` | Producer | EF Core queue (`UseOutbox`, `AddOutboxQueue`, `IOutboxQueue<TContext>`). |
-| `Pernix.OutboxRelay.Core` | Relay | Relay engine and provider abstractions. Referenced by the other three. |
+| `Pernix.OutboxRelay.Core` | Relay | Relay engine and provider abstractions. Referenced by the other four. |
 | `Pernix.OutboxRelay.Hosting` | Relay | `AddOutboxRelay`, health checks, telemetry helpers. Registers no outbox provider or destination. |
 | `Pernix.OutboxRelay.Outbox.PostgreSql` | Relay | PostgreSQL outbox provider (`AddPostgreSqlOutbox`). |
 | `Pernix.OutboxRelay.Destination.Kafka` | Relay | Kafka destination (`AddKafkaDestination`). |
 | `Pernix.OutboxRelay.Destination.Http` | Relay | Http destination (`AddHttpDestination`). |
 
-Releases are cut from tags: `client/vX.Y.Z` publishes the three client packages, `relay/vX.Y.Z` publishes the image and the four relay packages at one version. Install every client package at one version. No version is released yet. The first tags will be `client/v1.0.0` and `relay/v1.0.0` ([Release](docs/development.md#release)).
+Releases are cut from tags: `client/vX.Y.Z` publishes the three client packages, `relay/vX.Y.Z` publishes the image and the five relay packages at one version. Install every client package at one version. No version is released yet. The first tags will be `client/v1.0.0` and `relay/v1.0.0` ([Release](docs/development.md#release)).
 
 ## Quick start
 

@@ -174,11 +174,11 @@ Destination checks, per `OutboxRelay.Destinations[]` entry, in parallel, reporte
 - A destination named in any `OutboxRelay.Outboxes[].DeadLetter.Destination` must not be compacted: `OutboxRelay.Destinations[<name>]: topic '<topic>' is compacted and cannot hold dead letters of outbox '<outbox>'`.
 - One producer is built and disposed from the merged configuration, so a property librdkafka rejects fails here: `OutboxRelay.Destinations[<name>]: invalid producer configuration for cluster '<cluster>'`. The property value is not quoted. No message is sent.
 
-Destination bounds and routes, per outbox, for its destination and its `DeadLetter.Destination`. The relay creates each destination as a leader does for that outbox's `Ordering.Mode`, reads the send bound and the routes it declares, and disposes it. Nothing is sent and no connection is opened. A `null` send bound means unbounded and is accepted. Kafka declares a send bound of 30 s on `None` and none on `PerKey` and `Strict`. This stage refuses only a transport that declares an unusable value:
+Destination bounds and routes, per outbox, for its destination and its `DeadLetter.Destination`. The relay creates each destination as a leader does for that outbox's `Ordering.Mode`, reads the send bound and the routes it declares, and disposes it. Nothing is sent and no connection is opened. A `null` send bound means unbounded and is accepted. Kafka declares a send bound of 30 s on `None` and none on `PerKey` and `Strict`. Http declares its `SendTimeout` in every mode. This stage refuses only a transport that declares an unusable value:
 
 - `OutboxRelay.Outboxes[<outbox>]: destination '<destination>' declares SendBound <bound>; must be greater than zero`
 
-Routes (`null` = one address, see [Routing](delivery.md#routing)). A `Kafka` destination declares the keys of its `Routes`, or `null` when it has `Topic`. This stage refuses:
+Routes (`null` = one address, see [Routing](delivery.md#routing)). A `Kafka` destination declares the keys of its `Routes`, or `null` when it has `Topic`. An `Http` destination declares the keys of its `Routes`, or `null` when it has `Url`. This stage refuses:
 
 - `OutboxRelay.Outboxes[<outbox>].DeadLetter.Destination: destination '<destination>' declares Routes. A dead-letter destination has one address.`
 - `OutboxRelay.Outboxes[<outbox>]: destination '<destination>' declares an empty Routes set; Routes is null (one address) or names at least one route`
@@ -498,7 +498,7 @@ The image ignores root-level relay settings. An image whose outboxes are still a
 
 | Endpoint | Meaning |
 |---|---|
-| `GET :5612/livez` | 200 while the process is up and every outbox worker loop runs and makes progress. 503 if a worker loop stops, or a worker is past its progress due time (stuck on an await), while the host is not stopping. Database and broker outages, gate stalls and delivery pauses do not affect it. A Kafka `None` send counts as stuck 30 s + 10 s after it started. A Kafka `PerKey` or `Strict` send never does, because it has no timeout. |
+| `GET :5612/livez` | 200 while the process is up and every outbox worker loop runs and makes progress. 503 if a worker loop stops, or a worker is past its progress due time (stuck on an await), while the host is not stopping. Database and broker outages, gate stalls and delivery pauses do not affect it. A Kafka `None` send counts as stuck 30 s + 10 s after it started. A Kafka `PerKey` or `Strict` send never does, because it has no timeout. An Http send counts as stuck `SendTimeout` + 10 s after it started, in every mode. |
 | `GET :5612/readyz` | 200 while the host has started, is not stopping and every outbox database is reachable. 503 while any outbox database is unreachable. A lock held by another replica does not affect it. |
 
 ## Metrics

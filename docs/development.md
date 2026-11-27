@@ -26,7 +26,7 @@ Workflows call the reusable workflows and actions of `Pernix-Labs/pernix-ci`, pi
 
 | Unit | Tag | Publishes |
 |---|---|---|
-| `relay` | `relay/vX.Y.Z` | Image `ghcr.io/pernix-labs/pernix-outbox-relay`, packages `Pernix.OutboxRelay.Core`, `Pernix.OutboxRelay.Hosting`, `Pernix.OutboxRelay.Outbox.PostgreSql`, `Pernix.OutboxRelay.Destination.Kafka` |
+| `relay` | `relay/vX.Y.Z` | Image `ghcr.io/pernix-labs/pernix-outbox-relay`, packages `Pernix.OutboxRelay.Core`, `Pernix.OutboxRelay.Hosting`, `Pernix.OutboxRelay.Outbox.PostgreSql`, `Pernix.OutboxRelay.Destination.Kafka`, `Pernix.OutboxRelay.Destination.Http` |
 | `client` | `client/vX.Y.Z` | Packages `Pernix.OutboxRelay.Client`, `Pernix.OutboxRelay.Client.PostgreSql`, `Pernix.OutboxRelay.Client.EntityFrameworkCore` |
 
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): on every PR and push to `main`. Secret scan, gates, build, test, image build and scan, pack dry check. A PR never pushes an image or package. A push to `main` pushes image `sha-<L>`.
