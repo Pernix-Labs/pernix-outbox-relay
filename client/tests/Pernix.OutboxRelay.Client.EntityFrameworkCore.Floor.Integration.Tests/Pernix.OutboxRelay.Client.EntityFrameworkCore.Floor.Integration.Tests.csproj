@@ -34,6 +34,7 @@
     <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\RecordingPublisher.cs" Link="Shared\RecordingPublisher.cs" />
     <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\ServiceProviderTests.cs" Link="Shared\ServiceProviderTests.cs" />
     <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\ThrowingPublisher.cs" Link="Shared\ThrowingPublisher.cs" />
+    <Compile Include="..\Pernix.OutboxRelay.Client.EntityFrameworkCore.Integration.Tests\TestContainer.cs" Link="Shared\TestContainer.cs" />
   </ItemGroup>
 
 </Project>

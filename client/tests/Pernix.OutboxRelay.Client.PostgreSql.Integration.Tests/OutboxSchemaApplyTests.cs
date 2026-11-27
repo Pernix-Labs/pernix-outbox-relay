@@ -27,8 +27,8 @@ public sealed class OutboxSchemaApplyTests(PostgreSqlFixture postgres)
     [Fact]
     public async Task Two_tables_with_two_prefixes_apply_in_one_schema_on_postgres_13()
     {
-        await using var container = new PostgreSqlBuilder(OldestImage).Build();
-        await container.StartAsync(TestContext.Current.CancellationToken);
+        await using var container = TestContainer.PostgreSql(OldestImage).Build();
+        await container.StartBoundedAsync(TestContext.Current.CancellationToken);
 
         await AssertTwoTablesApplyAsync(container.GetConnectionString());
     }
