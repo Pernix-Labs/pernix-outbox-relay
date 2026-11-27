@@ -59,7 +59,7 @@ public sealed class StrictLeaderKillTests
         }
 
         await using var leader = builder.Build();
-        await leader.StartAsync(Ct);
+        await leader.StartBoundedAsync(Ct);
         try
         {
             Assert.True(

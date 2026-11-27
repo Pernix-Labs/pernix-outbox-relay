@@ -31,7 +31,7 @@ internal sealed class LeaderKillFixture : IAsyncDisposable
     private LeaderKillFixture()
     {
         network = new NetworkBuilder().WithName($"leader-kill-{Guid.NewGuid():N}").Build();
-        postgres = new PostgreSqlBuilder("postgres:17.11")
+        postgres = TestContainer.PostgreSql("postgres:17.11")
             .WithDatabase(Database)
             .WithUsername(Username)
             .WithPassword(Password)
@@ -86,7 +86,7 @@ internal sealed class LeaderKillFixture : IAsyncDisposable
         try
         {
             await fixture.network.CreateAsync();
-            await Task.WhenAll(fixture.postgres.StartAsync(), fixture.kafka.StartAsync());
+            await Task.WhenAll(fixture.postgres.StartBoundedAsync(), fixture.kafka.StartBoundedAsync());
             return fixture;
         }
         catch

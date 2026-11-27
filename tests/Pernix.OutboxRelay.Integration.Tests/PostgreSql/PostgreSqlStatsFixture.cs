@@ -7,13 +7,13 @@ namespace Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 // Used by PostgreSqlOutboxStatsTests only: gate lag is cluster-wide. Autovacuum off so no worker xid shows as gate lag.
 public sealed class PostgreSqlStatsFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:17.11")
+    private readonly PostgreSqlContainer container = TestContainer.PostgreSql("postgres:17.11")
         .WithCommand("-c", "max_prepared_transactions=10", "-c", "autovacuum=off")
         .Build();
 
     public string ConnectionString => container.GetConnectionString();
 
-    public async ValueTask InitializeAsync() => await container.StartAsync();
+    public async ValueTask InitializeAsync() => await container.StartBoundedAsync();
 
     public async ValueTask DisposeAsync() => await container.DisposeAsync();
 

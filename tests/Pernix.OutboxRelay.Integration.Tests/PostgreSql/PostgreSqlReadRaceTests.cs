@@ -11,13 +11,13 @@ namespace Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 // The read gate is cluster-wide, so any other backend holding an xid would hide the raced row. Own container, autovacuum off, nothing else connects.
 public sealed class PostgreSqlReadRaceFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:17.11")
+    private readonly PostgreSqlContainer container = TestContainer.PostgreSql("postgres:17.11")
         .WithCommand("-c", "autovacuum=off")
         .Build();
 
     public string ConnectionString => container.GetConnectionString();
 
-    public async ValueTask InitializeAsync() => await container.StartAsync();
+    public async ValueTask InitializeAsync() => await container.StartBoundedAsync();
 
     public async ValueTask DisposeAsync() => await container.DisposeAsync();
 }

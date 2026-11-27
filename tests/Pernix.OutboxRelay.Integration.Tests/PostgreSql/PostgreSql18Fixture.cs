@@ -7,11 +7,11 @@ namespace Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 // Used by PostgreSql18OutboxStoreTests only: NOT NULL ... NOT VALID exists from PG18, the shared fixture stays on 17.11.
 public sealed class PostgreSql18Fixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:18.6").Build();
+    private readonly PostgreSqlContainer container = TestContainer.PostgreSql("postgres:18.6").Build();
 
     public string ConnectionString => container.GetConnectionString();
 
-    public async ValueTask InitializeAsync() => await container.StartAsync();
+    public async ValueTask InitializeAsync() => await container.StartBoundedAsync();
 
     public async ValueTask DisposeAsync() => await container.DisposeAsync();
 

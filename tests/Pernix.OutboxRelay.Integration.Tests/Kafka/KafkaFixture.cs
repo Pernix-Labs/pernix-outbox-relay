@@ -52,7 +52,7 @@ public sealed class KafkaFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await container.StartAsync();
+        await container.StartBoundedAsync();
         await CreateTopicAsync(EventsTopic, 1);
     }
 

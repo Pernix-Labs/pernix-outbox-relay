@@ -9,11 +9,11 @@ namespace Pernix.OutboxRelay.Integration.Tests.PostgreSql;
 
 public sealed class PostgreSqlFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:17.11").Build();
+    private readonly PostgreSqlContainer container = TestContainer.PostgreSql("postgres:17.11").Build();
 
     public string ConnectionString => container.GetConnectionString();
 
-    public async ValueTask InitializeAsync() => await container.StartAsync();
+    public async ValueTask InitializeAsync() => await container.StartBoundedAsync();
 
     public async ValueTask DisposeAsync() => await container.DisposeAsync();
 
