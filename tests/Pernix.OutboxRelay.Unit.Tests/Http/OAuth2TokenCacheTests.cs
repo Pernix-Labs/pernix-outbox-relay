@@ -84,6 +84,25 @@ public sealed class OAuth2TokenCacheTests
         Assert.Equal(2, handler.Count);
     }
 
+    [Theory]
+    [InlineData("86400")]
+    [InlineData("1000000000000")]
+    [InlineData("9223372036854775807")]
+    public async Task Huge_expires_in_is_clamped_to_the_max_lifetime(string expiresIn)
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent($"{{\"access_token\":\"tok\",\"expires_in\":{expiresIn}}}", Encoding.UTF8, "application/json"),
+        });
+        using var cache = Cache(handler);
+
+        var result = await cache.GetAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("Bearer tok", result.HeaderValue);
+        Assert.Null(result.Fault);
+        Assert.Equal(time.GetUtcNow() + OAuth2TokenCache.MaxLifetime - OAuth2TokenCache.ExpirySkew, result.ExpiresAt);
+    }
+
     [Fact]
     public async Task Concurrent_callers_share_one_fetch()
     {

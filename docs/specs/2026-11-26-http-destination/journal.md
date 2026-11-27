@@ -112,3 +112,4 @@ run: run_a1ffd40fb56b
 - 2026-11-27T00:38:42Z note — all 19 coords approved; closeout started
 - 2026-11-27T00:42:17Z note — closeout: Http csproj added to .github/release-units.yml relay unit (was missing; within G1/G7)
 - 2026-11-27T00:43:25Z closeout — b7caa31 docs/architecture + release-units; pre-existing stale refs outside branch: docs/runbook.md:194 Database destination, ADR 0005 old Kafka path
+- 2026-11-27T00:49:37Z note — closeout review: 7 findings; rework dispatched for R1 (SendAsync UriFormatException, DLQ Set throw, Reason CR/LF), R2 doc TokenUrl TLS, R3 expires_in clamp, R4 ring compaction, R5 prefixed reserved names, R6 roots dispose; accepted: token-cache re-Validate lifetime, no negative token cache

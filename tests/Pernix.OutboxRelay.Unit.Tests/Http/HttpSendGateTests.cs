@@ -299,6 +299,75 @@ public sealed class HttpSendGateTests
     }
 
     [Fact]
+    public async Task Timed_out_waiters_with_slots_held_do_not_grow_the_ring()
+    {
+        var time = new FakeTimeProvider();
+        using var gate = Gate(1, time);
+        var holder = gate.Rent(TimeSpan.FromDays(1), CancellationToken.None);
+        var slot = await gate.AcquireAsync(holder);
+        var live = new (SendContext Context, ValueTask<HttpSendSlot> Wait)[3];
+        for (var i = 0; i < live.Length; i++)
+        {
+            var context = gate.Rent(TimeSpan.FromDays(1), CancellationToken.None);
+            live[i] = (context, gate.AcquireAsync(context));
+        }
+
+        var initial = gate.QueueCapacity;
+        for (var i = 0; i < 1000; i++)
+        {
+            var waiter = gate.Rent(SendTimeout, CancellationToken.None);
+            var pending = gate.AcquireAsync(waiter);
+            time.Advance(SendTimeout);
+            Assert.Same(HttpSendGate.SlotWaitTimeout, await Outcome(pending, CancellationToken.None));
+            gate.Return(waiter);
+        }
+
+        Assert.Equal(initial, gate.QueueCapacity);
+        Assert.True(gate.QueuedEntries <= initial);
+
+        foreach (var (context, wait) in live)
+        {
+            gate.Release(slot);
+            Assert.Same(slot, await wait);
+            gate.Return(context);
+        }
+
+        gate.Release(slot);
+        gate.Return(holder);
+        Assert.Equal(0, gate.QueuedEntries);
+        Assert.Equal(1, gate.FreeCount);
+        Assert.Equal(gate.Rented, gate.Returned);
+    }
+
+    [Fact]
+    public async Task Ring_grows_when_live_waiters_fill_it()
+    {
+        using var gate = Gate(1);
+        var holder = gate.Rent(SendTimeout, CancellationToken.None);
+        var slot = await gate.AcquireAsync(holder);
+        var initial = gate.QueueCapacity;
+        var waiters = Enumerable.Range(0, initial + 1)
+            .Select(_ => gate.Rent(SendTimeout, CancellationToken.None))
+            .Select(context => (Context: context, Wait: gate.AcquireAsync(context)))
+            .ToArray();
+
+        Assert.Equal(initial * 2, gate.QueueCapacity);
+        Assert.Equal(initial + 1, gate.QueuedEntries);
+
+        foreach (var (context, wait) in waiters)
+        {
+            gate.Release(slot);
+            Assert.Same(slot, await wait);
+            gate.Return(context);
+        }
+
+        gate.Release(slot);
+        gate.Return(holder);
+        Assert.Equal(1, gate.FreeCount);
+        Assert.Equal(gate.Rented, gate.Returned);
+    }
+
+    [Fact]
     public async Task Waiters_are_granted_in_fifo_order()
     {
         using var gate = Gate(1);

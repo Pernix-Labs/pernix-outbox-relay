@@ -550,6 +550,32 @@ public sealed class HttpDestinationSendTests
     }
 
     [Fact]
+    public async Task Rendered_url_from_a_long_key_never_throws()
+    {
+        await using var destination = fixture.Create(HttpDestinationFixture.Url("/orders/{key}"));
+        var key = Encoding.UTF8.GetBytes(new string('/', 22_000));
+
+        var result = await destination.SendAsync(HttpDestinationFixture.Message(key: key), Ct);
+
+        Assert.Same(DeliveryResult.Delivered.Instance, result);
+        Assert.Equal(Https + "/orders/" + string.Concat(Enumerable.Repeat("%2F", 22_000)), Assert.Single(fixture.Handlers.Single().Requests).Uri);
+        AssertGateSettled(destination);
+    }
+
+    [Theory]
+    [InlineData("orders/7")]
+    [InlineData("")]
+    public void Rendered_url_uri_rejects_is_refused_without_throwing(string url)
+    {
+        Assert.False(HttpDestination.TryCreateRendered(url, out var uri));
+
+        Assert.Null(uri);
+        var fault = Assert.IsType<DeliveryResult.MessageFault>(HttpDestination.InvalidUriFault);
+        Assert.True(fault.Permanent);
+        Assert.Equal("rendered URL is not a valid URI", fault.Error);
+    }
+
+    [Fact]
     public async Task Forwarding_fault_names_the_header_not_the_value()
     {
         await using var destination = fixture.Create(HttpDestinationFixture.Url());

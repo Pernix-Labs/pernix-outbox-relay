@@ -88,6 +88,31 @@ public sealed class HttpDeadLetterHeadersTests
     }
 
     [Fact]
+    public void Reason_control_characters_become_spaces()
+    {
+        var message = Message(null) with { DeadLetter = Info with { Reason = "boom\r\nInjected: yes\0" } };
+        var request = new HttpRequestMessage();
+
+        Assert.Null(HttpDeadLetterHeaders.Apply(message, request.Headers));
+
+        Assert.Equal("boom  Injected: yes ", Raw(request, DeadLetterHeaderNames.Reason));
+        Assert.False(request.Headers.NonValidated.Contains("Injected"));
+    }
+
+    [Theory]
+    [InlineData("Content-Type")]
+    [InlineData("bad name")]
+    public void Refused_header_is_a_destination_fault_not_an_exception(string name)
+    {
+        var request = new HttpRequestMessage();
+
+        Assert.False(HttpDeadLetterHeaders.TrySet(request.Headers, name, "v", out var fault));
+
+        var destinationFault = Assert.IsType<DeliveryResult.DestinationFault>(fault);
+        Assert.Equal($"dead-letter header '{name}' cannot be sent", destinationFault.Error);
+    }
+
+    [Fact]
     public void Cached_strings_are_reused()
     {
         var message = Message("orders");

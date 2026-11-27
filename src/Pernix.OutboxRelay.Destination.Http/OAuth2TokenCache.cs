@@ -14,6 +14,7 @@ internal readonly record struct OAuth2TokenResult(string? HeaderValue, DateTimeO
 internal sealed class OAuth2TokenCache : IDisposable
 {
     internal static readonly TimeSpan ExpirySkew = TimeSpan.FromSeconds(60);
+    internal static readonly TimeSpan MaxLifetime = TimeSpan.FromHours(24);
     internal const int MaxResponseSize = 64 * 1024;
     private const string FaultPrefix = "OAuth2 token: ";
 
@@ -191,8 +192,7 @@ internal sealed class OAuth2TokenCache : IDisposable
                 return (new CachedToken("Bearer " + accessToken, DateTimeOffset.MaxValue), null);
             }
 
-            var lifetime = TimeSpan.FromSeconds(seconds) - ExpirySkew;
-            return (new CachedToken("Bearer " + accessToken, issuedAt + (lifetime > TimeSpan.Zero ? lifetime : TimeSpan.Zero)), null);
+            return (new CachedToken("Bearer " + accessToken, issuedAt + Lifetime(seconds)), null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -256,6 +256,14 @@ internal sealed class OAuth2TokenCache : IDisposable
         }
 
         return !string.IsNullOrEmpty(accessToken) && expiresValid && expiresIn is null or >= 0;
+    }
+
+    // Clamped before TimeSpan arithmetic: a huge expires_in would overflow TimeSpan or DateTimeOffset.
+    internal static TimeSpan Lifetime(long expiresIn)
+    {
+        var lifetime = expiresIn >= (long)MaxLifetime.TotalSeconds ? MaxLifetime : TimeSpan.FromSeconds(expiresIn);
+        lifetime -= ExpirySkew;
+        return lifetime > TimeSpan.Zero ? lifetime : TimeSpan.Zero;
     }
 
     internal static string Describe(Exception exception)

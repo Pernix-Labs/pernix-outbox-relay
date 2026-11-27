@@ -103,7 +103,9 @@ internal sealed class HeaderForwarding
             if (!isContentType)
             {
                 emitted ??= NamePrefix is null ? name : names?.Get(name) ?? string.Concat(NamePrefix, name);
-                if (overridden.Contains(emitted))
+
+                // A prefix can compose a reserved name, e.g. "Proxy-" + "Authorization".
+                if (overridden.Contains(emitted) || Reserved.Contains(emitted))
                 {
                     continue;
                 }
@@ -123,7 +125,9 @@ internal sealed class HeaderForwarding
 
             if (TryFindCaseDuplicate(row, i, pairwise ? null : seen, out var other))
             {
-                fault = Fault($"forwarded headers '{other}' and '{name}' differ only by case");
+                fault = Fault(string.Equals(other, name, StringComparison.Ordinal)
+                    ? $"forwarded header '{name}' appears more than once"
+                    : $"forwarded headers '{other}' and '{name}' differ only by case");
                 return false;
             }
 

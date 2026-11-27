@@ -269,8 +269,8 @@ Every key sits under `OutboxRelay.Destinations[].Http`. An `Http` destination ac
 | `Signing.Encoding` | `Hex` | `HmacSha256` only. `Hex` or `Base64`. |
 | `Signing.ValuePrefix` | none | `HmacSha256` only. Prepended to the signature, for example `sha256=`. |
 | `Signing.WebhookId` | `{outbox}-{id}` | `StandardWebhooks`. The `webhook-id` value. Takes the placeholders. |
-| `Tls.CaCertificatePath` | none | PEM bundle of private CAs. The server chain must end in one of them. No setting disables certificate validation. |
-| `Tls.ClientCertificate.CertificatePath`, `.KeyPath` | none | PEM client certificate and key, both required together. |
+| `Tls.CaCertificatePath` | none | PEM bundle of private CAs. The server chain must end in one of them. No setting disables certificate validation. Also applies to `Authentication.TokenUrl`, so the bundle must cover the token endpoint's CA too. |
+| `Tls.ClientCertificate.CertificatePath`, `.KeyPath` | none | PEM client certificate and key, both required together. The client certificate is also offered to `Authentication.TokenUrl`. |
 | `Tls.ClientCertificate.PfxPath` | none | PFX client certificate, instead of the PEM pair. |
 | `Tls.ClientCertificate.Credential` | none | `PfxPath` only. Names an `HttpCredentials` entry with `CertificatePassword`. |
 | `HealthProbe.Url` | none | Required when `HealthProbe` is set. Literal URL, no placeholders. Sent once at startup. |

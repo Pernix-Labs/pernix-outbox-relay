@@ -62,6 +62,19 @@ internal static partial class HttpPlanCompiler
         return failures.Count > start ? null : plan;
     }
 
+    internal static void ReleaseTls(X509Certificate2Collection? roots, X509Certificate2? clientCertificate)
+    {
+        if (roots is not null)
+        {
+            foreach (var root in roots)
+            {
+                root.Dispose();
+            }
+        }
+
+        clientCertificate?.Dispose();
+    }
+
     internal static bool IsToken(string? name) => !string.IsNullOrEmpty(name) && !name.AsSpan().ContainsAnyExcept(TokenChars);
 
     internal static bool IsContentHeader(string name) =>
@@ -111,7 +124,7 @@ internal static partial class HttpPlanCompiler
             HttpVersionSchemes(version);
             if (Failed || endpoints is null)
             {
-                clientCertificate?.Dispose();
+                ReleaseTls(roots, clientCertificate);
                 return null;
             }
 

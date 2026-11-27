@@ -112,6 +112,17 @@ internal sealed class HttpSendGate : IDisposable
         }
     }
 
+    internal int QueueCapacity
+    {
+        get
+        {
+            lock (sync)
+            {
+                return ring.Length;
+            }
+        }
+    }
+
     internal int QueuedEntries
     {
         get
@@ -400,7 +411,9 @@ internal sealed class HttpSendGate : IDisposable
 
     private void Enqueue(WaiterEntry entry)
     {
-        if (ringCount == ring.Length)
+        // Tombstones pile up while slots stay held. Compact first, grow only when live entries fill over half,
+        // so capacity tracks live waiters and compaction stays amortized O(1).
+        if (ringCount == ring.Length && Compact() > ring.Length / 2)
         {
             var grown = new WaiterEntry[ring.Length * 2];
             for (var i = 0; i < ringCount; i++)
@@ -414,6 +427,29 @@ internal sealed class HttpSendGate : IDisposable
 
         ring[(ringHead + ringCount) & (ring.Length - 1)] = entry;
         ringCount++;
+    }
+
+    private int Compact()
+    {
+        var mask = ring.Length - 1;
+        var live = 0;
+        for (var i = 0; i < ringCount; i++)
+        {
+            var entry = ring[(ringHead + i) & mask];
+            if (entry.Generation == entry.Context.Generation && entry.Context.State == SendContext.Waiting)
+            {
+                ring[(ringHead + live) & mask] = entry;
+                live++;
+            }
+        }
+
+        for (var i = live; i < ringCount; i++)
+        {
+            ring[(ringHead + i) & mask] = default;
+        }
+
+        ringCount = live;
+        return live;
     }
 
     private CancellationTokenSource NewDeadline() =>

@@ -785,6 +785,22 @@ public sealed class HttpConfigValidationTests : IDisposable
     }
 
     [Fact]
+    public void Failed_compile_releases_loaded_roots_and_client_certificate()
+    {
+        var (certificate, key) = WritePem("release");
+        var roots = HandlerSettings.LoadCaBundle(certificate);
+        var client = X509Certificate2.CreateFromPemFile(certificate, key);
+        var root = Assert.Single(roots);
+        Assert.NotEqual(IntPtr.Zero, root.Handle);
+
+        HttpPlanCompiler.ReleaseTls(roots, client);
+        HttpPlanCompiler.ReleaseTls(null, null);
+
+        Assert.Equal(IntPtr.Zero, root.Handle);
+        Assert.Equal(IntPtr.Zero, client.Handle);
+    }
+
+    [Fact]
     public void Client_certificate_needs_pem_pair_or_pfx()
     {
         Fails(Tls(new() { ["Tls:ClientCertificate:Credential"] = "Ledger" }), $"{P}.Tls.ClientCertificate: set CertificatePath and KeyPath, or PfxPath");

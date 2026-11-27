@@ -229,6 +229,34 @@ public sealed class HeaderForwardingTests
         Assert.Contains("'tenant-id'", fault.Error, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(12)]
+    public void Exact_duplicate_is_a_permanent_fault_with_its_own_message(int count)
+    {
+        var headers = Enumerable.Range(0, count - 2).Select(i => ($"h{i}", "v")).Append(("tenant-id", "a")).Append(("tenant-id", "b")).ToArray();
+        HashSet<string>? seen = null;
+
+        var fault = ForwardFault(new HeaderForwarding(null), Row(headers), ref seen);
+
+        Assert.True(fault.Permanent);
+        Assert.Equal("forwarded header 'tenant-id' appears more than once", fault.Error);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Prefix_that_composes_a_reserved_name_is_not_forwarded(bool listed)
+    {
+        var mode = listed ? ForwardHeadersMode.Listed : ForwardHeadersMode.All;
+        var forwarding = Forwarding(mode, names: mode == ForwardHeadersMode.Listed ? ["alive", "traceparent"] : null, prefix: "Keep-");
+
+        var request = Forward(forwarding, Row(("alive", "timeout=5"), ("traceparent", "t")));
+
+        Assert.False(request.Headers.NonValidated.Contains("Keep-Alive"));
+        Assert.Equal("t", Value(request, "Keep-traceparent"));
+    }
+
     [Fact]
     public void Case_duplicate_set_is_reused_and_cleared()
     {

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Security.Authentication;
@@ -16,6 +17,8 @@ internal sealed class HttpDestination : IDestination
     private static readonly UriCreationOptions RenderedUri = new() { DangerousDisablePathAndQueryCanonicalization = true };
 
     private static readonly DeliveryResult DisposedFault = new DeliveryResult.DestinationFault(nameof(ObjectDisposedException));
+
+    internal static readonly DeliveryResult InvalidUriFault = new DeliveryResult.MessageFault("rendered URL is not a valid URI", Permanent: true);
 
     private readonly HttpDestinationPlan plan;
     private readonly bool probe;
@@ -118,7 +121,12 @@ internal sealed class HttpDestination : IDestination
                     return urlFault;
                 }
 
-                uri = new Uri(url, in RenderedUri);
+                if (!TryCreateRendered(url, out var rendered))
+                {
+                    return InvalidUriFault;
+                }
+
+                uri = rendered;
             }
 
             using var request = new HttpRequestMessage(endpoint.Method, uri)
@@ -175,9 +183,9 @@ internal sealed class HttpDestination : IDestination
                 request.Headers.TryAddWithoutValidation(authName, plan.Auth.HeaderValue);
             }
 
-            if (message.DeadLetter is not null)
+            if (message.DeadLetter is not null && HttpDeadLetterHeaders.Apply(message, request.Headers) is { } deadLetterFault)
             {
-                HttpDeadLetterHeaders.Apply(message, request.Headers);
+                return deadLetterFault;
             }
 
             if (slot.Signer is { } signer)
@@ -389,6 +397,10 @@ internal sealed class HttpDestination : IDestination
         logger.HttpProbeFailed(plan.Name, host, method, failure);
         throw new DestinationValidationException($"Destinations[{plan.Name}]: health probe {method} to host '{host}' failed: {failure}");
     }
+
+    // Never throws (Req8 AC2): a render Uri rejects is a permanent fault with fixed text, never the value.
+    internal static bool TryCreateRendered(string url, [NotNullWhen(true)] out Uri? uri) =>
+        Uri.TryCreate(url, in RenderedUri, out uri);
 
     // Failure branch only. Unreachable under the IDestination contract: Core sends only accepted rows.
     private string ContractViolation(OutgoingMessage message)

@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Http.Headers;
 using Pernix.OutboxRelay.Core.Abstractions;
@@ -13,38 +15,71 @@ internal static class HttpDeadLetterHeaders
     private static readonly string[] Attempts =
         [.. Enumerable.Range(0, CachedAttempts + 1).Select(static i => i.ToString(CultureInfo.InvariantCulture))];
 
+    private static readonly SearchValues<char> ControlChars = SearchValues.Create("\r\n\0");
+
     // Outbox and destination values are the configured name instances: no per-send string, no cache keyed by content.
-    public static void Apply(OutgoingMessage message, HttpRequestHeaders target)
+    // Null when every header is set. Names are relay constants, so a refused header is a relay defect: DestinationFault.
+    public static DeliveryResult? Apply(OutgoingMessage message, HttpRequestHeaders target)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(target);
         var deadLetter = message.DeadLetter ?? throw new ArgumentException("Message has no dead-letter info.", nameof(message));
 
-        Set(target, DeadLetterHeaderNames.Reason, deadLetter.Reason);
-        Set(target, DeadLetterHeaderNames.RetryAttempts, AttemptsString(deadLetter.Attempts));
-        Set(target, DeadLetterHeaderNames.OriginalDestination, message.Source.Destination);
-        Set(target, DeadLetterHeaderNames.OriginalOutbox, message.Source.Outbox);
-        Set(target, DeadLetterHeaderNames.OriginalId, message.Source.Id.ToString(CultureInfo.InvariantCulture));
-        Set(target, DeadLetterHeaderNames.FailedAt, deadLetter.FailedAt.UtcDateTime.ToString(FailedAtFormat, CultureInfo.InvariantCulture));
+        if (!TrySet(target, DeadLetterHeaderNames.Reason, SafeReason(deadLetter.Reason), out var fault)
+            || !TrySet(target, DeadLetterHeaderNames.RetryAttempts, AttemptsString(deadLetter.Attempts), out fault)
+            || !TrySet(target, DeadLetterHeaderNames.OriginalDestination, message.Source.Destination, out fault)
+            || !TrySet(target, DeadLetterHeaderNames.OriginalOutbox, message.Source.Outbox, out fault)
+            || !TrySet(target, DeadLetterHeaderNames.OriginalId, message.Source.Id.ToString(CultureInfo.InvariantCulture), out fault)
+            || !TrySet(target, DeadLetterHeaderNames.FailedAt, deadLetter.FailedAt.UtcDateTime.ToString(FailedAtFormat, CultureInfo.InvariantCulture), out fault))
+        {
+            return fault;
+        }
+
         if (message.Route is { } route)
         {
-            Set(target, DeadLetterHeaderNames.OriginalRoute, route);
+            return TrySet(target, DeadLetterHeaderNames.OriginalRoute, route, out fault) ? null : fault;
         }
-        else
-        {
-            target.Remove(DeadLetterHeaderNames.OriginalRoute);
-        }
+
+        target.Remove(DeadLetterHeaderNames.OriginalRoute);
+        return null;
     }
 
     internal static string AttemptsString(int attempts) =>
         (uint)attempts <= CachedAttempts ? Attempts[attempts] : attempts.ToString(CultureInfo.InvariantCulture);
 
-    private static void Set(HttpRequestHeaders target, string name, string value)
+    // Reason can carry exception text: CR, LF and NUL become spaces. A clean reason keeps its instance.
+    internal static string SafeReason(string reason)
     {
-        target.Remove(name);
-        if (!target.TryAddWithoutValidation(name, value))
+        if (!reason.AsSpan().ContainsAny(ControlChars))
         {
-            throw new InvalidOperationException($"Dead-letter header '{name}' cannot be added.");
+            return reason;
         }
+
+        return string.Create(reason.Length, reason, static (span, source) =>
+        {
+            source.AsSpan().CopyTo(span);
+            span.Replace('\r', ' ');
+            span.Replace('\n', ' ');
+            span.Replace('\0', ' ');
+        });
+    }
+
+    internal static bool TrySet(HttpRequestHeaders target, string name, string value, [NotNullWhen(false)] out DeliveryResult? fault)
+    {
+        try
+        {
+            target.Remove(name);
+            if (target.TryAddWithoutValidation(name, value))
+            {
+                fault = null;
+                return true;
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or FormatException)
+        {
+        }
+
+        fault = new DeliveryResult.DestinationFault($"dead-letter header '{name}' cannot be sent");
+        return false;
     }
 }
