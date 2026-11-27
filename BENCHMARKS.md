@@ -12,7 +12,9 @@ The metric is allocated bytes, not throughput. Bytes per message repeat to the b
 |---|---|---|---|
 | `kafka` | The Kafka destination alone: send and delivery report. | B/msg | librdkafka mock cluster |
 | `kafka-dlq` | The same, with every send a dead letter. | B/dlq-msg | librdkafka mock cluster |
-| `term` | The delivery loop end to end over an in-memory outbox session, with a null, Kafka or dead-letter destination. | B/msg | librdkafka mock cluster |
+| `term` | The delivery loop end to end over an in-memory outbox session, with a null, Kafka, dead-letter or Http destination. | B/msg | librdkafka mock cluster |
+| `http`, `http-dlq` | The Http destination alone against an in-process loopback endpoint (C6 `200` response), main and dead-letter sends. | B/msg, B/dlq-msg | nothing |
+| `http-stub` | The Http destination with a stub handler: relay-owned bytes plus the request objects. | B/msg | nothing |
 | `session` | The PostgreSQL outbox session: read a batch, commit it. | B/row | PostgreSQL |
 | `fixed` | One PostgreSQL call of each kind: read, commit, check, summary, stats. | B/call | PostgreSQL |
 | `idle` | A leader with an empty outbox, polling every second. | B/s | librdkafka mock cluster |
@@ -89,6 +91,32 @@ Heap after a full GC, first / last / max checkpoint (KB), per run.
 | Session, `None`, batch 500, 1M rows | 4,588 / 4,573 / 4,588 | 4,484 / 4,470 / 4,484 | 4,495 / 4,471 / 4,495 |
 
 No rising trend. 4,000 open-and-close sessions (`churn`) left 0 relay backends on PostgreSQL in every run.
+
+### Http destination
+
+Measured separately from the rest of this page: `avataraps/spec-http-destination` at `c9fe4f1`, 2026-11-26, Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1, arm64, .NET 10.0.15. Median of the 5 allocation guard runs that set the Http ceilings. Spread 0.0 except `http2` (11.1 B) and idle (21.3 B/s). The endpoint is an in-memory loopback behind `ConnectCallback` that answers `200` with 6 headers and a 100 B body.
+
+| Cell | B/msg |
+|---|---:|
+| Http destination alone, stub handler, `None` window 500, 1 header | 424.0 |
+| Delivery loop, Http, `None` / `PerKey` / `Strict`, batch 500, 1 header | 1,504.8 / 1,504.9 / 1,504.9 |
+| Delivery loop, Http, templated URL `/orders/{id}?key={key}`, `None` | 1,888.0 |
+| Delivery loop, Http, `MaxRequestsInFlight` 8, `None` | 1,504.8 |
+| Delivery loop, Http dead letter, `None` (B/dlq-msg) | 2,000.8 |
+| Delivery loop, Http `"2-cleartext"`, `None` | 4,058.2 |
+| Idle, Http, `None` (B/s) | 99.5 |
+
+The delivery loop share is 192.8 B/msg, as with the null destination. The stub cell holds no relay-owned bytes: its 424.0 B are the `HttpRequestMessage`, content and header objects the relay must build. The other 888.0 B/msg of the main cell (1,504.8 − 192.8 − 424.0) are the `SocketsHttpHandler` stack and the response.
+
+Relay-owned gaps (target ≤ 64 B/msg, met on the HTTP/1.1 loopback and stub cells):
+
+| Case | Relay-owned | Total |
+|---|---:|---:|
+| HTTP/1.1 over a real loopback socket, `None` window 500 | ~350 B/msg (sampled 316-362) | 2,030.5 B/msg |
+| HTTP/1.1 over a real loopback socket, `Strict` window 1 | 0 | 1,656.0 B/msg |
+| HTTP/2 cleartext, in-memory, `None` | ~430 B/msg (sampled 420.5-440.7) | 4,058.2 B/msg |
+
+Both gaps are one `HttpDestination.SendAsync` state machine box per suspended send. Sends suspend when the response completes asynchronously (a real socket, or the HTTP/2 read loop), and more sends are suspended at once than .NET 10's fixed `PoolingAsyncValueTaskMethodBuilder` cache holds. .NET 10 has no setting for that cache size. This is a known v1 gap, not guarded away: the `http2` ceiling includes the box. Detail: [`BASELINE.md`, "Http destination"](benchmarks/Pernix.OutboxRelay.Benchmarks/BASELINE.md#http-destination).
 
 ### BenchmarkDotNet
 

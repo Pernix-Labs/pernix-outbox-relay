@@ -1322,3 +1322,60 @@ Per type (`--profile`, reported round, two runs):
 **Miss: relay-owned target ≤ 64 B/msg is not met under h2.** Relay-owned = ~430 B/msg (sampled 420.5-440.7), all of it the `HttpDestination.<SendAsync>` box. This is the O9 mechanism seen on the real socket (~350 B/msg there): h2 completes every response on the connection's read loop, so every in-memory send suspends, and 64 concurrent suspended sends exceed the `PoolingAsyncValueTaskMethodBuilder` cache. Relay code does not depend on version. No other `Pernix.OutboxRelay.Destination.Http` type appears in the profile.
 
 Framework floor under h2: term total 4,049.9 − relay box ~430 − Core term loop share 192.8 (from the h1 term vs destination-only delta) ≈ **3,430 B/msg**, vs the h1 in-memory floor 1,312.0. Most of the extra comes from the h2 stack's per-stream async state machines, `Http2Stream`, and write-queue entries. Recorded, not targeted. No `AllocationCeilings` change here: task 18 sets the `term None http2 b500 h1` row from guard runs.
+
+### Allocation guard: Http ceilings (task 18)
+
+`AllocationGuardTests` gains the 9 Http guard cells from the design. Task 17 took no fallback, so `term None http2 b500 h1` is a guard cell. Term/1 (`None,PerKey`) and Term/3 (`Strict`) gain `http`. A new `Http` fact runs `Http/1` (`term --modes None --dests http-tpl,http-sat,http-dlq,http2`, 200,000 msgs, 50,000 warm-up) and `Http/2` (`http-stub --modes None --headers 1 --urls static`, whose row `http-stub None w500 h1 static 200` is the cell `http-stub None w500 h1`). Idle gains `Idle/2` (`idle --modes None --dests http --seconds 120 --rounds 1`).
+
+| Item | Value |
+|---|---|
+| Code | `c9fe4f1` on `avataraps/spec-http-destination` + the task 18 guard changes (test code only) |
+| Date | 2026-11-26, 5 full guard runs 22:20:29-23:52:08 UTC, ~18 min each |
+| Machine | Apple M6, 12 cores, 32 GB RAM, macOS 27.2.1 (26B131), arm64, .NET 10.0.15, Release, header `gcServer=False latency=Batch runtimeEvents=off profile=False otel=False` |
+| Other | The only worker running. Load average 3.4-31.5 (1 min). Docker 29.9.3, `postgres:17.11` |
+| Runs | 5 runs of `dotnet test --project tests/Pernix.OutboxRelay.Unit.Tests --filter-class "Pernix.OutboxRelay.Unit.Tests.Allocation.AllocationGuardTests" --explicit only --output Detailed` with the 9 Http rows unset. `reported` round, median |
+
+Ceilings: limit = median + margin, the existing rules: margin = max(10% of median, 3 × spread), idle margin = max(3 × spread, 200 B/s). Every Http row takes the 10% rule (or idle 200 B/s). `term None http2` spread 11.1 B, 3 × 33.3 < 405.8.
+
+| Cell | Unit | Run 1 | Run 2 | Run 3 | Run 4 | Run 5 | Median | Spread | Margin | Ceiling |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| http-stub None w500 h1 | msg | 424.0 | 424.0 | 424.0 | 424.0 | 424.0 | 424.0 | 0.0 | 42.4 | 466.4 |
+| term None http b500 h1 | msg | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 0.0 | 150.5 | 1,655.3 |
+| term PerKey http b500 h1 | msg | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 0.0 | 150.5 | 1,655.4 |
+| term Strict http b500 h1 | msg | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 1,504.9 | 0.0 | 150.5 | 1,655.4 |
+| term None http-tpl b500 h1 | msg | 1,888.0 | 1,888.0 | 1,888.0 | 1,888.0 | 1,888.0 | 1,888.0 | 0.0 | 188.8 | 2,076.8 |
+| term None http-sat b500 h1 | msg | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 1,504.8 | 0.0 | 150.5 | 1,655.3 |
+| term None http-dlq b500 h1 | dlq-msg | 2,000.8 | 2,000.8 | 2,000.8 | 2,000.8 | 2,000.8 | 2,000.8 | 0.0 | 200.1 | 2,200.9 |
+| term None http2 b500 h1 | msg | 4,050.5 | 4,051.7 | 4,058.2 | 4,061.6 | 4,058.5 | 4,058.2 | 11.1 | 405.8 | 4,464.0 |
+| idle None http interval 1s | s | 98.6 | 109.0 | 99.5 | 98.8 | 119.9 | 99.5 | 21.3 | 200.0 | 299.5 |
+
+`Exceeds` on the h1 loopback term rows is the spike's `UseProxy` default vs off delta (−539.4 B/req, `http-floor None w500 h1 static`): restoring the macOS system proxy lookup would cross each of those ceilings. The stub has no handler, and the h2 and idle cells have no measured reduction, so those rows say `none`. The http2 ceiling includes the known relay-owned `HttpDestination.<SendAsync>` box (~430 B/msg, O9 gap, see "HTTP/2 cleartext cell") and does not hide it: it guards against growth beyond it.
+
+Existing 24 ceilings are unchanged and pass in all 5 runs on this machine. Medians (spread), B per unit:
+
+| Cell | Median | Spread | Ceiling |
+|---|---:|---:|---:|
+| term None null b500 h1 | 192.8 | 0.0 | 212.1 |
+| term None kafka b500 h1 | 208.6 | 8.4 | 260.9 |
+| term None dlq b500 h1 | 918.8 | 9.1 | 1,010.7 |
+| term PerKey null b500 h1 | 192.9 | 0.0 | 212.2 |
+| term PerKey kafka b500 h1 | 191.6 | 0.1 | 210.8 |
+| term PerKey dlq b500 h1 | 929.0 | 1.3 | 1,022.8 |
+| term Strict null b500 h1 | 192.9 | 0.0 | 212.2 |
+| term Strict kafka b500 h1 | 248.4 | 0.0 | 273.2 |
+| term Strict dlq b500 h1 | 992.4 | 0.0 | 1,091.6 |
+| session None batch 500 h1 | 319.6 | 0.8 | 352.3 |
+| session PerKey batch 500 h1 | 319.3 | 0.2 | 351.2 |
+| session Strict batch 500 h1 | 320.0 | 1.3 | 351.9 |
+| None / PerKey / Strict read-empty | 1,064.3 | 0.0 | 1,170.7 |
+| None / PerKey / Strict check | 1,328.3 | 0.0 | 1,461.1 |
+| idle None null interval 1s | 117.9 | 57.6 | 335.2 |
+| idle None kafka interval 1s | 74.3 | 27.7 | 292.0 |
+| idle PerKey null interval 1s | 85.5 | 28.8 | 296.9 |
+| idle PerKey kafka interval 1s | 97.1 | 20.7 | 295.7 |
+| idle Strict null interval 1s | 84.5 | 20.7 | 284.5 |
+| idle Strict kafka interval 1s | 105.7 | 49.8 | 295.0 |
+
+`term None dlq` 918.8 equals the median its ceiling was set from at `835b04a`, so the ~919 seen in task 16 is not a regression. `FlatTerm`, `FlatSession` and `Churn` passed in all 5 runs.
+
+Verify run with the ceilings set, same code and machine, 2026-11-26 23:53:15 UTC to 2026-11-27 00:11:27 UTC: 8/8 facts passed, 33/33 cells pass (`term None http2` 4,058.8, `idle None http` 120.7, every other Http cell equal to its median). No `AllocationCeilings` change to the existing 24 rows.
